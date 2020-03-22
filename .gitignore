@@ -1,0 +1,6 @@
+.DS_Store
+.idea/*
+dataset/*
+logging/*
+old_code/*
+__pycache__/
