@@ -160,18 +160,30 @@ tikzplotlib.save("../paper/image/perturbation2.tex")
 #############################
 
 #######################
-a = np.load('logging_2/cifar100_resnet_shape-adaptor_0.npy', allow_pickle=True)
-b = np.load('logging_2/cifar100_resnet_human-cifar_1.npy', allow_pickle=True)
-c = np.load('logging_2/cifar100_resnet_human-imagenet_0.npy', allow_pickle=True)
-shape_total = a.item()['shape-list']
+a0 = np.load('logging/logging_2/cifar100_resnet_shape-adaptor_0.npy', allow_pickle=True)
+a1 = np.load('logging/logging_2/cifar100_resnet_shape-adaptor_1.npy', allow_pickle=True)
+a2 = np.load('logging/logging_2/cifar100_resnet_shape-adaptor_2.npy', allow_pickle=True)
+
+b0 = np.load('logging/logging_2/cifar100_resnet_human-cifar_0.npy', allow_pickle=True)
+b1 = np.load('logging/logging_2/cifar100_resnet_human-cifar_1.npy', allow_pickle=True)
+b2 = np.load('logging/logging_2/cifar100_resnet_human-cifar_2.npy', allow_pickle=True)
+
+c0 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_0.npy', allow_pickle=True)
+c1 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_1.npy', allow_pickle=True)
+c2 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_2.npy', allow_pickle=True)
+
+shape_total = a0.item()['shape-list']
 aa = 0
 figs = []
 import matplotlib.font_manager as fm
-# prop = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-regular.otf')
-prop = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-Regular.otf')
-prop_italic = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-It.otf')
+prop = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-regular.otf')
+prop_italic = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-It.otf')
+prop_bold = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-Bold.otf')
+# prop = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-Regular.otf')
+# prop_italic = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-It.otf')
 for shape in shape_total:
-    plt.figure(figsize=(7, 4.5))
+    plt.figure(figsize=(6, 4.5))
+    plt.subplots_adjust(bottom=0.15, left=0.12, right=1.02)
     y = 0
     resnet_len = 18
     sa_num = len(shape) - 1
@@ -180,16 +192,20 @@ for shape in shape_total:
     shape_imagenet_index = [0, 1, 5, 9, 15]
     index = 0; cifar_index = 0; imagenet_index = 0
     plt.text(-32, -22, 'Epoch {}'.format(aa), horizontalalignment='center', fontproperties=prop, size=13)
-    plt.text(-12, -22, 'All ResNet-50 networks have the same parameter space.', horizontalalignment='center', fontproperties=prop_italic, size=13)
-    plt.text(-12, 6, 'ResNet-50 on CIFAR-100', horizontalalignment='center', fontproperties=prop_italic, size=13, style='italic')
+    plt.text(-12, -22, 'All ResNet-50 networks have the same structure, and representation space.\n Results are averaged over three individual runs.',
+             horizontalalignment='center', verticalalignment='center', fontproperties=prop_italic, size=11)
+    plt.text(-12, 5.5, 'ResNet-50 on CIFAR-100', horizontalalignment='center', fontproperties=prop_bold, size=13, style='italic')
 
     plt.text(0, 1.5, 'Shape Adaptor\n Designed', horizontalalignment='center', fontproperties=prop, size=13)
     plt.text(-12, 1.5, 'Human Designed B\n (for CIFAR-100)', horizontalalignment='center', fontproperties=prop, size=13)
     plt.text(-24, 1.5, 'Human Designed A\n (for ImageNet)', horizontalalignment='center', fontproperties=prop, size=13)
 
-    plt.text(0, -19, 'Acc: {:.02f}'.format(a.item()['loss'][:aa+1,3].max()*100), horizontalalignment='center', fontproperties=prop, size=13)
-    plt.text(-12, -19, 'Acc: {:.02f}'.format(b.item()['loss'][:aa+1,3].max()*100), horizontalalignment='center', fontproperties=prop, size=13)
-    plt.text(-24, -19, 'Acc: {:.02f}'.format(c.item()['loss'][:aa+1,3].max()*100), horizontalalignment='center', fontproperties=prop, size=13)
+    a = a0.item()['loss'][:aa + 1, 3].max() + a1.item()['loss'][:aa + 1, 3].max() + a2.item()['loss'][:aa + 1, 3].max()
+    b = b0.item()['loss'][:aa + 1, 3].max() + b1.item()['loss'][:aa + 1, 3].max() + b2.item()['loss'][:aa + 1, 3].max()
+    c = c0.item()['loss'][:aa + 1, 3].max() + c1.item()['loss'][:aa + 1, 3].max() + c2.item()['loss'][:aa + 1, 3].max()
+    plt.text(0, -19, 'Acc: {:.02f}'.format(a*100/3), horizontalalignment='center', fontproperties=prop, size=13)
+    plt.text(-12, -19, 'Acc: {:.02f}'.format(b*100/3), horizontalalignment='center', fontproperties=prop, size=13)
+    plt.text(-24, -19, 'Acc: {:.02f}'.format(c*100/3), horizontalalignment='center', fontproperties=prop, size=13)
     for i in range(resnet_len):
         ## shape adaptor shape
         if i < 17:
@@ -222,38 +238,62 @@ for shape in shape_total:
     # plt.margins(0,0)
     # plt.gca().xaxis.set_major_locator(plt.NullLocator())
     # plt.gca().yaxis.set_major_locator(plt.NullLocator())
-    plt.savefig('../paper/gif_2/resnet50_{}.png'.format(aa))
+    plt.savefig('../paper/gif_2/resnet50_{}.png'.format(aa), dpi=200)
     aa += 1
     plt.close()
 
 ###########################
 #######################
-a = np.load('logging_2/cifar100_resnet_shape-adaptor_0.npy', allow_pickle=True)
-b = np.load('logging_2/cifar100_resnet_human-cifar_1.npy', allow_pickle=True)
-c = np.load('logging_2/cifar100_resnet_human-imagenet_0.npy', allow_pickle=True)
+a0 = np.load('logging/logging_2/cifar100_resnet_shape-adaptor_0.npy', allow_pickle=True)
+a1 = np.load('logging/logging_2/cifar100_resnet_shape-adaptor_1.npy', allow_pickle=True)
+a2 = np.load('logging/logging_2/cifar100_resnet_shape-adaptor_2.npy', allow_pickle=True)
+
+b0 = np.load('logging/logging_2/cifar100_resnet_human-cifar_0.npy', allow_pickle=True)
+b1 = np.load('logging/logging_2/cifar100_resnet_human-cifar_1.npy', allow_pickle=True)
+b2 = np.load('logging/logging_2/cifar100_resnet_human-cifar_2.npy', allow_pickle=True)
+
+c0 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_0.npy', allow_pickle=True)
+c1 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_1.npy', allow_pickle=True)
+c2 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_2.npy', allow_pickle=True)
+
 figs = []
 import matplotlib.font_manager as fm
 # prop = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-regular.otf')
 prop = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-Regular.otf')
 prop_italic = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-It.otf')
-for i in range(200):
-    plt.figure(figsize=(5, 4.5))
-    plt.plot(c.item()['loss'][:i+1,3]*100, label='Human Designed A', color='blue')
-    plt.plot(b.item()['loss'][:i+1,3]*100, label='Human Designed B', color='red')
-    plt.plot(a.item()['loss'][:i+1,3]*100, label='Shape Adaptor Designed', color='orange')
 
-    plt.scatter(i, a.item()['loss'][i,3]*100, s=18, color='orange')
-    plt.scatter(i, b.item()['loss'][i,3]*100, s=18, color='red')
-    plt.scatter(i, c.item()['loss'][i,3]*100, s=18, color='blue')
+
+for i in range(1, 201):
+    plt.figure(figsize=(5, 4.5))
+    plt.subplots_adjust(bottom=0.15)
+
+    a = np.stack([a0.item()['loss'][:i, 3], a1.item()['loss'][:i, 3], a2.item()['loss'][:i, 3]])
+    b = np.stack([b0.item()['loss'][:i, 3],  b1.item()['loss'][:i, 3], b2.item()['loss'][:i, 3]])
+    c = np.stack([c0.item()['loss'][:i, 3], c1.item()['loss'][:i, 3], c2.item()['loss'][:i, 3]])
+
+    plt.plot(np.mean(c*100, axis=0), label='Human Designed A', color='blue')
+    plt.plot(np.mean(b*100, axis=0), label='Human Designed B', color='red')
+    plt.plot(np.mean(a*100, axis=0), label='Shape Adaptor Designed', color='orange')
+
+    plt.scatter(i, np.mean(a*100, axis=0)[-1], s=18, color='orange')
+    plt.scatter(i, np.mean(b*100, axis=0)[-1], s=18, color='red')
+    plt.scatter(i, np.mean(c*100, axis=0)[-1], s=18, color='blue')
+
+    plt.fill_between(np.arange(i), np.max(a, axis=0)*100, np.min(a, axis=0)*100, facecolor='orange', alpha=0.1)
+    plt.fill_between(np.arange(i), np.max(b, axis=0)*100, np.min(b, axis=0)*100, facecolor='red', alpha=0.1)
+    plt.fill_between(np.arange(i), np.max(c, axis=0)*100, np.min(c, axis=0)*100, facecolor='blue', alpha=0.1)
+
     plt.xlim(0, 200)
-    plt.ylim(5, 85)
+    mult = max(int(np.mean(c*100, axis=0).max() / 5) - 1, 0)
+    plt.ylim(mult*5, 82)
+    plt.yticks(np.arange(mult*5, 82, 5))
     plt.ylabel('Accuracy', fontproperties=prop, size=13)
     plt.xlabel('Epochs', fontproperties=prop, size=13)
     plt.xticks(fontproperties=prop, size=13)
     plt.yticks(fontproperties=prop, size=13)
-    plt.legend(loc='lower right', prop=prop,frameon=False)
+    plt.legend(loc='upper left', prop=prop, frameon=False)
 
-    plt.savefig('../paper/gif_3/resnet50_{}.png'.format(i))
+    plt.savefig('../paper/gif_3/resnet50_{}.png'.format(i), dpi=200)
     plt.close()
 
 images = []
@@ -261,3 +301,25 @@ for i in range(200):
     file_path = os.path.join('../paper/gif_2/resnet50_{}.png'.format(i))
     images.append(imageio.imread(file_path))
 imageio.mimsave('../paper/resnet50_1.gif', images, fps=20)
+
+
+import imageio
+import numpy as np
+
+#Create reader object for the gif
+gif1 = imageio.get_reader('../paper/resnet50_1.gif')
+gif2 = imageio.get_reader('../paper/resnet50_2.gif')
+
+#If they don't have the same number of frame take the shorter
+number_of_frames = min(gif1.get_length(), gif2.get_length())
+
+#Create writer object
+new_gif=[]
+for i in range(number_of_frames):
+    img1 = plt.imread('../paper/gif_2/resnet50_{}.png'.format(i))
+    img2 = plt.imread('../paper/gif_3/resnet50_{}.png'.format(i+1))
+    new_image = np.hstack((img1, img2))
+    plt.imsave('../paper/gif_4/resnet50_{}.png'.format(i), new_image)
+
+from pygifsicle import optimize
+optimize('../paper/resnet50.gif', "../paper/resnet50_small.gif")
