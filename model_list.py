@@ -7,8 +7,8 @@ import torch.nn.functional as F
 
 
 def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
-    # = sigmoid(alpha) if no scaling, i.e. scaling = 1; will be defined in the model_training file
-    sigmoid_alpha = torch.sigmoid(alpha) * ShapeAdaptor.scaling + r1/(r2-r1) * (ShapeAdaptor.scaling - 1)
+    # sigmoid_alpha = sigmoid(alpha) if no scaling, i.e. scaling = 1; will be defined in the model_training file
+    sigmoid_alpha = torch.sigmoid(alpha) * ShapeAdaptor.scaling + r1 / (r2 - r1) * (ShapeAdaptor.scaling - 1)
     s_alpha = (r2 - r1) * sigmoid_alpha.item() + r1
 
     # total no. of shape adaptors
@@ -24,7 +24,7 @@ def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
         ShapeAdaptor.current_dim = ShapeAdaptor.current_dim * s_alpha
         dim = 1 if ShapeAdaptor.current_dim < 1 else round(ShapeAdaptor.current_dim)  # output dim should be at least 1
     '''
-    input1 = sampling(x, scale=r1),  input2 = sampling(x, scale=r2)
+    input1 = sampling(x, scale=r1);  input2 = sampling(x, scale=r2)
     It's important to debug/confirm your model design using these two different implementations.
     Implementation A:
     input2_rs = F.interpolate(input2, scale_factor=(1/r2)*s_alpha, mode='bilinear', align_corners=True)
@@ -34,7 +34,7 @@ def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
     input1_rs = F.interpolate(input1, scale_factor=(1/r1)*s_alpha, mode='bilinear', align_corners=True)
     input2_rs = F.interpolate(input2, size=input1_rs.shape[-1], mode='bilinear', align_corners=True)
 
-    Those two implementations (along with an additional version below) should give the same structure.
+    Those two implementations (along with an additional version below) should produce the same shape.
     Note: +- 1 dim change in intermediate layers is expected due to the different rounding methods.
     '''
 
@@ -47,6 +47,7 @@ def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
 
 
 def SA_init(input_dim, output_dim, sa_num, r1=0.5, r2=1.0):
+    # input_dim: input data dimension;  output_dim: output last layer feature dimension
     # input_dim * s(sigmoid(alpha)) ^ sa_num = output_dim, find alpha
     # s(sigmoid(alpha)) = r + (1 - r) * sigmoid(alpha)
     eps = 1e-4  # avoid inf
@@ -82,34 +83,39 @@ class VGG(nn.Module):
         if self.input_shape > 64:
             self.filter[type].append('M')
         layers = []
-        channel_in = 3  # input data dimension
+        channel_in = 3  # input RGB images
         self.features = nn.ModuleList()
         for ch in self.filter[type]:
             if ch == 'M':
-                # we use empty list to bypass pooling layers (insert shape adaptor afterwards)
+                # AutoSC mode is built on original network with *along with* the network shape
                 if 'human' in self.mode or self.mode == 'autosc':
                     layers += [nn.MaxPool2d(2, 2)]
             else:
+                # Standard mode is built on the original network *without* the network shape
                 layers += [nn.Conv2d(channel_in, ch, kernel_size=3, padding=1),
                            nn.BatchNorm2d(ch),
                            nn.ReLU(inplace=True)]
                 channel_in = ch
         self.features = nn.Sequential(*layers)
 
-        # mark all cell indices for the model, 3 for number of operations in each cell [i.e., conv-bn-relu]
-        # we don't insert shape adaptor at the last layer
+        # Define two types of shape adaptor modes:
         if self.mode == 'shape-adaptor':
             ShapeAdaptor.type = 'local'
-            self.max_pool = nn.MaxPool2d(2, 2)
+            self.max_pool = nn.MaxPool2d(2, 2)  # max-pool is considered as the down-sample branch.
+            # We don't apply shape adaptor at the last layer, thus "-3".
             self.sampling_index_full = [i for i in range(len(self.features)-3) if isinstance(self.features[i], nn.ReLU)]
             if self.sa_num is None:
-                self.sa_num = int(np.log2(self.input_shape / 2))  # compute the number of shape adaptors required
-            index_gap = len(self.sampling_index_full) / self.sa_num  # compute the gap between layers for each shape adaptor
+                # Automatically define optimal number of shape adaptors.
+                self.sa_num = int(np.log2(self.input_shape / 2))
+
+            # Compute the gap between layers for each shape adaptor
+            index_gap = len(self.sampling_index_full) / self.sa_num
             self.sampling_index = [self.sampling_index_full[int(i * index_gap)] for i in range(self.sa_num)]
 
         elif self.mode == 'autosc':
             ShapeAdaptor.type = 'global'
-            self.max_pool = nn.MaxPool2d(2, 2, ceil_mode=True)
+            self.max_pool = nn.MaxPool2d(2, 2, ceil_mode=True)  # use ceil mode to avoid 0 pixel feature layer
+            # We don't insert shape adaptors on top of maxpooling layer. (excessive reshaping at the same location)
             self.sampling_index_full = [i for i in range(len(self.features)-3) if isinstance(self.features[i], nn.ReLU)
                                         and not isinstance(self.features[i+1], nn.MaxPool2d)]
             if self.sa_num is None:
@@ -126,6 +132,7 @@ class VGG(nn.Module):
             if self.mode == 'shape-adaptor':
                 self.alpha = nn.Parameter(torch.tensor([SA_init(input_shape, output_shape, self.sa_num)] * self.sa_num, requires_grad=True))
             elif self.mode == 'autosc':
+                # Initialise as the original network shape: s(\alpha) = 0.95
                 self.alpha = nn.Parameter(torch.tensor([alpha_value] * self.sa_num, requires_grad=True))
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -156,7 +163,7 @@ class VGG(nn.Module):
             for i in range(len(self.features)):
                 if isinstance(self.features[i], nn.Conv2d):
                     self.shape_list.append(x.shape[-1])
-                if isinstance(self.features[i], nn.MaxPool2d):  # assuming using global type shape adaptors
+                if isinstance(self.features[i], nn.MaxPool2d):  # when using global type shape adaptors
                     ShapeAdaptor.current_dim = ShapeAdaptor.current_dim * 0.5
                     ShapeAdaptor.current_dim_true = ShapeAdaptor.current_dim * 0.5
                 x = self.features[i](x)

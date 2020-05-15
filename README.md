@@ -1,7 +1,7 @@
 # Shape Adaptor
-This repository contains the source code to support the paper: [Shape Adaptor: A Learnable Resizing Module](https://arxiv.org) by [Shikun Liu](shikun.io) and [Adobe Research Team](https://research.adobe.com/). 
+This repository contains the source code to support the paper: [Shape Adaptor: A Learnable Resizing Module](https://arxiv.org), by [Shikun Liu](shikun.io) and [Adobe Research Team](https://research.adobe.com/). 
 
-![alt text](resnet50.gif "Logo Title Text 1")
+![alt text](resnet50.gif "Shape Visualisation of ResNet50")
 
 
 ## Experiments

@@ -238,7 +238,7 @@ for shape in shape_total:
     # plt.margins(0,0)
     # plt.gca().xaxis.set_major_locator(plt.NullLocator())
     # plt.gca().yaxis.set_major_locator(plt.NullLocator())
-    plt.savefig('../paper/gif_2/resnet50_{}.png'.format(aa), dpi=200)
+    plt.savefig('../paper/gif_2/resnet50_{}.png'.format(aa), dpi=300)
     aa += 1
     plt.close()
 
@@ -293,7 +293,7 @@ for i in range(1, 201):
     plt.yticks(fontproperties=prop, size=13)
     plt.legend(loc='upper left', prop=prop, frameon=False)
 
-    plt.savefig('../paper/gif_3/resnet50_{}.png'.format(i), dpi=200)
+    plt.savefig('../paper/gif_3/resnet50_{}.png'.format(i), dpi=300)
     plt.close()
 
 images = []
