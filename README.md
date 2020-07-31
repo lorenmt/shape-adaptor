@@ -11,16 +11,20 @@ This project evaluates on image classification tasks. For small-resolution datas
 *Please note that the datasets (provided in the above links) evaluated in Table 1 (in the original paper) and AutoTL, though might come from the same source, but they are different: All experiments done in Table 1 were based on raw, uncropped images; while in AutoTL, the training images were cropped (to be consistent with prior works).*
 
 ## Experiments
-You may reproduce most of experiments in the paper by running the following files.
+You may reproduce most of the experiments presented in the paper with the following code.
 
-- `utils.py` includes the 
-- `model_list.py`  includes the shape adaptor formations and network architectures for VGG, ResNet and MobileNetv2.
-- `model_training.py` includes the training and evaluation for shape adaptor networks, vanilla human-defined networks, and AutoSC.
-- `model_training_autotl.py` includes the training and evaluation for AutoTL.
+File Names | Description
+---------- | -----------
+`utils.py` | a list of dataset mean and variance used for data loader
+`model_list.py` |  shape adaptor formations and network architecture design for VGG, ResNet and MobileNetv2 
+ `model_training.py` | training and evaluation for shape adaptor networks, vanilla human-defined networks, and AutoSC.
+ `model_training_autotl.py`  | training and evaluation for AutoTL
+
+To run any experiments on fine-grained dataset: First to create a dataset repository by `cd dataset`, and then move the downloaded datasets into the `dataset` folder. To run experiments on AutoTL application: First to create a sub-folder `autotl` under the `dataset` folder, and then move the downloaded 5 AutoTl datasets into that folder. Please remember to rename the folder of downloaded AutoTL datasets corresponding to the ones defined in `model_training_autotl.py` file.
 
 For running standard shape adaptor networks, original human-designed networks, or AutoSC (automated shape compression), please run: 
 
-`python model_training.py --FLAG_NAME 'FLAG_VALUE`. 
+`python model_training.py --FLAG_NAME 'FLAG_VALUE'`. 
 
 
 For running AutoTL (automated transfer learning), please run: 
@@ -39,11 +43,11 @@ VGG-16 | ResNet-50 | MobiletNetv2
 ## Other Comments
 1. The provided code is highly optimised for readability, with heavy documentations to assist readers to better understand this project. For training with default options and hyper-parameters, you should expect to achieve similar performances (at most +-2\% difference) compared to the numbers presented in the paper. If you have met some weird problems, or simply require some additional help on understanding some parts of the code, please contact me directly, or just post an issue in this repo (preferred, so everybody could see it).
 
-2.  We did not perform any heavy hyper-parameter search on each network and each dataset, i.e. you could possibly achieve a better result by further tuning it. Please check the appendix in the paper for the negative results: this might save you some time, if you are planning to further improve shape adaptors.
+2.  We did not perform any heavy hyper-parameter search on each network and each dataset, i.e., you could possibly achieve a better result by further tuning it. Please also check the appendix in the paper for the negative results: this might save you some time, if you are planning to improve shape adaptors for your own research.
 
-3. Training shape adaptor networks with large-resolution datasets are slow (compared to the training time on human-designed networks only, still much faster than NAS methods). This is mainly due to the learned optimal shape requires much more memory than the one from human-designed shape. AutoSC and memory-constrained shape adaptors are the only initial solutions to this problem, but we believe a better shape could be found by breaking the linear relationships between feature weighting and reshaping factors (an important future direction).
+3. Training shape adaptor networks with large-resolution datasets are slow (compared to the training time on human-designed networks only, still much faster than NAS methods). This is mainly due to the optimal shape learned from shape adaptors requires much more memory than the one from human-designed shape. AutoSC and memory-constrained shape adaptors are the only initial solutions to this problem, but we believe a better shape could be found by breaking the linear relationships between feature weighting and reshaping factors (an important future direction).
 
-4. We have also provided the general formation for shape adaptors in a multi-branch design in Appendix A. Though we did not implement this general version for any experiments, we believe this could be a promising direction towards building an AutoML system to learn neural shape and structure in a unified manner (another important future direction). 
+4. We have provided the general formation for shape adaptors in a multi-branch design in Appendix A. Though we did not implement this general version for any experiments, we believe this could be a promising direction towards building an AutoML system to learn neural shape and structure in a unified manner (another important future direction). 
 
 
 ## License
