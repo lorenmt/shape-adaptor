@@ -34,7 +34,7 @@ To visualise shapes, you may modify the file `visualise_shape.py` to generate sh
 
 VGG-16 | ResNet-50 | MobiletNetv2
 ------- | --------| ------------
-<img src="visuals/vgg16.png" alt="VGG-16" height="300"> | <img src="visuals/resnet50.png" alt="ResNet-50"  height="300">  | <img src="visuals/mobilnetv2.png" alt="MobileNetv2"  height="300">
+<img src="visuals/vgg16.png" alt="VGG-16" height="300"> | <img src="visuals/resnet50.png" alt="ResNet-50"  height="300">  | <img src="visuals/mobilenetv2.png" alt="MobileNetv2"  height="300">
 
 ## Other Comments
 1. The provided code is highly optimised for readability, with heavy documentations to assist readers to better understand this project. For training with default options and hyper-parameters, you should expect to achieve similar performances (at most +-2\% difference) compared to the numbers presented in the paper. If you have met some weird problems, or simply require some additional help on understanding some parts of the code, please contact me directly, or just post an issue in this repo (preferred, so everybody could see it).
