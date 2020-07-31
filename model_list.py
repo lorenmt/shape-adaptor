@@ -181,6 +181,11 @@ class VGG(nn.Module):
                 x = self.features[i](x)
                 if i in self.sampling_index:
                     x = ShapeAdaptor(self.max_pool(x), x, self.alpha[ShapeAdaptor.counter])
+
+        if self.input_shape > 64:
+            # include the last max-pooling layer
+            self.shape_list.append(x.shape[-1])
+
         output = self.avg_pool(x)
         pred = self.classifier(output.view(output.size(0), -1))
         return pred

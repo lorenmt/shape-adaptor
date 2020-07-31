@@ -17,7 +17,7 @@ import time
 os.environ['KMP_DUPLICATE_LIB_OK'] ='True'
 parser = argparse.ArgumentParser(description='AutoTL training for single GPU')
 parser.add_argument('--gpu', default=0, type=int)
-parser.add_argument('--dataset', default='cub_200', type=str, help='wikiart, sketches, stanford-cars, vgg-flowers')
+parser.add_argument('--dataset', default='cub_200', type=str, help='cub_200, wikiart, sketches, stanford-cars, vgg-flowers')
 parser.add_argument('--alpha_lr', default=0.1, type=float, help='learning rate for shape parameters')
 parser.add_argument('--weight_lr', default=0.001, type=float, help='learning rate for weight parameters')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='weight decay for network weight')
