@@ -7,35 +7,37 @@ import torch.nn.functional as F
 
 
 def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
-    # sigmoid_alpha = sigmoid(alpha) if no scaling, i.e. scaling = 1; will be defined in the model_training file
-    sigmoid_alpha = torch.sigmoid(alpha) * ShapeAdaptor.scaling + r1 / (r2 - r1) * (ShapeAdaptor.scaling - 1)
+    # sigmoid_alpha = sigmoid(alpha) if having penalty, i.e. penalty = 1;
+    # the penalty value will be defined/computed in the model_training file
+    sigmoid_alpha = torch.sigmoid(alpha) * ShapeAdaptor.penalty + r1 / (r2 - r1) * (ShapeAdaptor.penalty - 1)
     s_alpha = (r2 - r1) * sigmoid_alpha.item() + r1
 
     # total no. of shape adaptors
     ShapeAdaptor.counter += 1
-    # the true current dim without any scaling (will be used for computing the correct scaling value)
+    # the true current dim without any penalty (will be used for computing the correct penalty value)
     ShapeAdaptor.current_dim_true *= ((r2 - r1) * torch.sigmoid(alpha).item() + r1)
     if ShapeAdaptor.type == 'local':
-        # each shape adaptor will drop at least 1 dimension (local structure), used in standard mode
+        # a shape adaptor will drop at least 1 dimension (local structure), used in standard or AutoTL mode
         ShapeAdaptor.current_dim = int(ShapeAdaptor.current_dim * s_alpha)
         dim = 1 if ShapeAdaptor.current_dim < 1 else ShapeAdaptor.current_dim   # output dim should be at least 1
     elif ShapeAdaptor.type == 'global':
-        # each shape adaptor could drop no value at all (global structure), used in AutoSC mode
+        # a shape adaptor could maintain the same dimension (global structure), used in AutoSC mode
         ShapeAdaptor.current_dim = ShapeAdaptor.current_dim * s_alpha
         dim = 1 if ShapeAdaptor.current_dim < 1 else round(ShapeAdaptor.current_dim)  # output dim should be at least 1
+
     '''
-    input1 = sampling(x, scale=r1);  input2 = sampling(x, scale=r2)
+    input1 = resizing(x, scale=r1);  input2 = resizing(x, scale=r2)
     It's important to debug/confirm your model design using these two different implementations.
     Implementation A:
     input2_rs = F.interpolate(input2, scale_factor=(1/r2)*s_alpha, mode='bilinear', align_corners=True)
-    input1_rs = F.interpolate(input1, size=input2_rs.shape[-1], mode='bilinear', align_corners=True)
+    input1_rs = F.interpolate(input1, size=input2_rs.shape[-2:], mode='bilinear', align_corners=True)
 
     Implementation B:
     input1_rs = F.interpolate(input1, scale_factor=(1/r1)*s_alpha, mode='bilinear', align_corners=True)
-    input2_rs = F.interpolate(input2, size=input1_rs.shape[-1], mode='bilinear', align_corners=True)
+    input2_rs = F.interpolate(input2, size=input1_rs.shape[-2:], mode='bilinear', align_corners=True)
 
     Those two implementations (along with an additional version below) should produce the same shape.
-    Note: +- 1 dim change in intermediate layers is expected due to the different rounding methods.
+    Note: +- 1 dim change in intermediate layers is expected due to different rounding methods.
     '''
 
     input1_rs = F.interpolate(input1, size=dim, mode='bilinear', align_corners=True)
@@ -47,9 +49,9 @@ def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
 
 
 def SA_init(input_dim, output_dim, sa_num, r1=0.5, r2=1.0):
-    # input_dim: input data dimension;  output_dim: output last layer feature dimension
+    # input_dim: input data dimension;  output_dim: output / last layer feature dimension
     # input_dim * s(sigmoid(alpha)) ^ sa_num = output_dim, find alpha
-    # s(sigmoid(alpha)) = r + (1 - r) * sigmoid(alpha)
+    # s(sigmoid(alpha)) = r1 + (r2 - r1) * sigmoid(alpha)
     eps = 1e-4  # avoid inf
     if input_dim * r1 ** sa_num > output_dim:
         return np.log(eps)
@@ -61,15 +63,15 @@ def SA_init(input_dim, output_dim, sa_num, r1=0.5, r2=1.0):
 VGG Network
 """
 
+
 class VGG(nn.Module):
-    def __init__(self, input_shape=32, output_shape=8, dataset=None, mode=None, sa_num=None, width_mult=1.0, type='D', alpha_value=2.19):
+    def __init__(self, input_shape=32, output_shape=8, dataset=None, mode=None, sa_num=None, type='D'):
         super(VGG, self).__init__()
         self.dataset = dataset
         self.mode = mode
         self.sa_num = sa_num
         self.input_shape = input_shape
         self.shape_list = []
-        self.alpha_value = alpha_value
         self.filter = {
             'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512],
             'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512],
@@ -77,49 +79,56 @@ class VGG(nn.Module):
             'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512],
         }
 
-        self.filter[type] = [int(i * width_mult) if i != 'M' else i for i in self.filter[type]][:-1] + [512]
-
-        # define VGG-19 feature extractor layers
+        # define VGG feature extractor layers
         if self.input_shape > 64:
+            # human-designed network will attach another max-pool layer before classifier (in large-resolution datasets)
             self.filter[type].append('M')
+
         layers = []
         channel_in = 3  # input RGB images
         self.features = nn.ModuleList()
         for ch in self.filter[type]:
             if ch == 'M':
-                # AutoSC mode is built on original network with *along with* the network shape
-                if 'human' in self.mode or self.mode == 'autosc':
+                # AutoSC mode is built on the human-designed network *along with* the original resizing layers
+                if 'human' in self.mode:
                     layers += [nn.MaxPool2d(2, 2)]
+                elif self.mode == 'autosc':
+                    layers += [nn.MaxPool2d(2, 2, ceil_mode=True)]
             else:
-                # Standard mode is built on the original network *without* the network shape
+                # Standard mode is built on the human-designed network *without* the original resizing layers
                 layers += [nn.Conv2d(channel_in, ch, kernel_size=3, padding=1),
                            nn.BatchNorm2d(ch),
                            nn.ReLU(inplace=True)]
                 channel_in = ch
         self.features = nn.Sequential(*layers)
 
-        # Define two types of shape adaptor modes:
+        # define two types of shape adaptor modes:
         if self.mode == 'shape-adaptor':
             ShapeAdaptor.type = 'local'
             self.max_pool = nn.MaxPool2d(2, 2)  # max-pool is considered as the down-sample branch.
-            # We don't apply shape adaptor at the last layer, thus "-3".
-            self.sampling_index_full = [i for i in range(len(self.features)-3) if isinstance(self.features[i], nn.ReLU)]
+            # we don't apply shape adaptor at the last layer, thus "-3": -1 * 3 operations in each conv layer.
+            self.sampling_index_full = [i for i in range(len(self.features) - 3) if isinstance(self.features[i], nn.ReLU)]
+
             if self.sa_num is None:
-                # Automatically define optimal number of shape adaptors.
+                # automatically define the optimal number of shape adaptors based on a heuristic.
                 self.sa_num = int(np.log2(self.input_shape / 2))
 
-            # Compute the gap between layers for each shape adaptor
+            # insert shape adaptors uniformly
             index_gap = len(self.sampling_index_full) / self.sa_num
             self.sampling_index = [self.sampling_index_full[int(i * index_gap)] for i in range(self.sa_num)]
 
         elif self.mode == 'autosc':
             ShapeAdaptor.type = 'global'
-            self.max_pool = nn.MaxPool2d(2, 2, ceil_mode=True)  # use ceil mode to avoid 0 pixel feature layer
-            # We don't insert shape adaptors on top of maxpooling layer. (excessive reshaping at the same location)
+            self.max_pool = nn.MaxPool2d(2, 2, ceil_mode=True)  # use ceil mode to avoid 0 dimension feature layer
+            # we don't insert shape adaptors on top of max-pooling layer. (excessive reshaping at the same position)
             self.sampling_index_full = [i for i in range(len(self.features)-3) if isinstance(self.features[i], nn.ReLU)
                                         and not isinstance(self.features[i+1], nn.MaxPool2d)]
+
             if self.sa_num is None:
+                # number of shape adaptors found by a grid search, this number is possibly not optimal
                 self.sa_num = 2 if self.input_shape < 64 else 4
+
+            # insert shape adaptors uniformly
             index_gap = len(self.sampling_index_full) / self.sa_num
             self.sampling_index = [self.sampling_index_full[int(i * index_gap)] for i in range(self.sa_num)]
 
@@ -130,10 +139,11 @@ class VGG(nn.Module):
 
         if 'human' not in self.mode:
             if self.mode == 'shape-adaptor':
+                # compute shape adaptor initialisation by a heuristic
                 self.alpha = nn.Parameter(torch.tensor([SA_init(input_shape, output_shape, self.sa_num)] * self.sa_num, requires_grad=True))
             elif self.mode == 'autosc':
-                # Initialise as the original network shape: s(\alpha) = 0.95
-                self.alpha = nn.Parameter(torch.tensor([alpha_value] * self.sa_num, requires_grad=True))
+                # initialise shape adaptors to be the original network shape: s(alpha) = 0.95, alpha = 2.19
+                self.alpha = nn.Parameter(torch.tensor([2.19] * self.sa_num, requires_grad=True))
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
 
@@ -150,7 +160,7 @@ class VGG(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        self.shape_list = []
+        self.shape_list = []  # record spatial dimension in each layer for shape visualisation
         if 'human' in self.mode:
             for i in range(len(self.features)):
                 if isinstance(self.features[i], nn.Conv2d):
@@ -163,7 +173,9 @@ class VGG(nn.Module):
             for i in range(len(self.features)):
                 if isinstance(self.features[i], nn.Conv2d):
                     self.shape_list.append(x.shape[-1])
-                if isinstance(self.features[i], nn.MaxPool2d):  # when using global type shape adaptors
+                if isinstance(self.features[i], nn.MaxPool2d):
+                    # in AutoSC mode, we need to include human-defined resizing layers to
+                    # re-compute the correct current dimension for shape adaptors
                     ShapeAdaptor.current_dim = ShapeAdaptor.current_dim * 0.5
                     ShapeAdaptor.current_dim_true = ShapeAdaptor.current_dim * 0.5
                 x = self.features[i](x)
@@ -177,6 +189,7 @@ class VGG(nn.Module):
 """
 ResNet Network
 """
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -192,7 +205,7 @@ class BasicBlock(nn.Module):
     expansion = 1
     __constants__ = ['downsample']
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, base_width=64, sa=False, input_shape=32, output_shape=8, sa_num=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, base_width=64, apply_sa=False, input_shape=32, output_shape=8, sa_num=None):
         super(BasicBlock, self).__init__()
 
         # self.downsample layers downsample the input when stride != 1
@@ -203,10 +216,10 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
         self.downsample = downsample
         self.stride = stride
-        self.sa = sa
+        self.apply_sa = apply_sa
         BasicBlock.counter += 1
 
-        if self.sa:
+        if self.apply_sa:
             self.alpha = nn.Parameter(torch.tensor(SA_init(input_shape, output_shape, sa_num), requires_grad=True))
 
     def forward(self, x):
@@ -219,7 +232,7 @@ class BasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
 
-        if self.sa:
+        if self.apply_sa:
             out = ShapeAdaptor(self.downsample(x), out, self.alpha, residual=True)
         else:
             if self.downsample is not None:
@@ -231,7 +244,8 @@ class BasicBlock(nn.Module):
 
 class Bottleneck(nn.Module):
     expansion = 4
-    def __init__(self, inplanes, planes, stride=1, downsample=None, base_width=64, sa=False, input_shape=None, output_shape=8, sa_num=None, alpha=None):
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, base_width=64, apply_sa=False, input_shape=None, output_shape=8, sa_num=None, alpha=None):
         super(Bottleneck, self).__init__()
         width = int(planes * (base_width / 64.))
         # self.downsample layers downsample the input when stride != 1
@@ -244,13 +258,12 @@ class Bottleneck(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
-        self.sa = sa
-        self.alpha = alpha
-        
+        self.apply_sa = apply_sa
+
         Bottleneck.counter += 1
 
-        if self.sa:
-            if self.alpha is None:
+        if self.apply_sa:
+            if alpha is None:
                 self.alpha = nn.Parameter(torch.tensor(SA_init(input_shape, output_shape, sa_num), requires_grad=True))
             else:
                 self.alpha = nn.Parameter(torch.tensor(alpha, requires_grad=True))
@@ -268,7 +281,7 @@ class Bottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        if self.sa:
+        if self.apply_sa:
             out = ShapeAdaptor(self.downsample(x), out, self.alpha, residual=True)
         else:
             if self.downsample is not None:
@@ -279,25 +292,27 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, dataset, mode, input_shape=32, output_shape=8, sa_num=None, width_mult=1.0, alpha_value=2.19):
+    def __init__(self, block, layers, dataset, mode, input_shape=32, output_shape=8, sa_num=None):
         super(ResNet, self).__init__()
         self.dataset = dataset
         self.mode = mode
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.sa_num = sa_num
-        self.width_mult = width_mult
         self.shape_list = []
-        self.alpha_value = alpha_value
-
-        self.inplanes = int(64 * self.width_mult)
+        self.inplanes = 64
         self.base_width = 64
         self.layers = layers
-        if self.mode == 'human-imagenet' or(self.mode == 'autosc' and self.input_shape >= 64):
+
+        if self.mode == 'human-imagenet' or (self.mode == 'autosc' and self.input_shape >= 64):
+            # large dataset using a 7 x 7 conv layer (the original ResNet for ImageNet)
             self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
             self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
         if self.mode == 'human-cifar' or (self.mode == 'autosc' and self.input_shape < 64):
+            # small dataset using a 3 x 3 conv layer (typically used in CIFAR-like small-resolution datasets)
             self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
+
         self.bn1   = nn.BatchNorm2d(self.inplanes)
         self.relu  = nn.ReLU(inplace=True)
         self.block = block
@@ -306,24 +321,38 @@ class ResNet(nn.Module):
         if self.mode in ['shape-adaptor', 'autotl']:
             ShapeAdaptor.type = 'local'
             if self.sa_num is None:
+                # optimal number of shape adaptors is computed by a heuristic
                 self.sa_num = int(np.log2(self.input_shape / 2))
-            self.index_gap = (sum(layers) + 1 - 1) / self.sa_num   # include the first layer, and not the last layer
+            # include the first conv layer, and not the last layer
+            self.index_gap = (sum(layers) + 1 - 1) / self.sa_num
+
             if self.input_shape > 64:
+                # choose kernel size for the first conv layer as consistent from human-designed networks
                 self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=1, padding=3, bias=False)
             else:
                 self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
             self.maxpool = nn.MaxPool2d(2, 2)
+
             if self.mode == 'shape-adaptor':
                 self.alpha_init = nn.Parameter(torch.tensor(SA_init(input_shape, output_shape, self.sa_num), requires_grad=True))
+
             elif self.mode == 'autotl':
-                self.alpha_init1 = nn.Parameter(torch.tensor(-2.19, requires_grad=True))  # s(alpha) = 0.55
-                self.alpha_init2 = nn.Parameter(torch.tensor(-2.19, requires_grad=True))  # s(alpha) = 0.55
+                # in AutoTL mode, we replace human-defined resizing layers by shape adaptors
+                # the original ResNet has two initial down-sampling layers before residual blocks
+                # s(alpha) = 0.55 -> alpha = -2.19,
+                # initialise shape adaptors to make them consistent with the pre-trained dimension
+                self.alpha_init1 = nn.Parameter(torch.tensor(-2.19, requires_grad=True))
+                self.alpha_init2 = nn.Parameter(torch.tensor(-2.19, requires_grad=True))
+
         elif self.mode == 'autosc':
             ShapeAdaptor.type = 'global'
             if self.sa_num is None:
+                # number of shape adaptors found by a grid search, this number is possibly not optimal
                 self.sa_num = 2 if self.input_shape <= 64 else 4
-            self.index_gap = (sum(layers) - 3 - 1) / self.sa_num  # not include and the last layer
+            # not include human-defined resizing layers (3) and the last layer (1)
+            self.index_gap = (sum(layers) - 3 - 1) / self.sa_num
 
+        # official ResNet structure design
         self.layer1 = self._make_layer(block, 64,  self.layers[0])
         self.layer2 = self._make_layer(block, 128, self.layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, self.layers[2], stride=2)
@@ -341,11 +370,11 @@ class ResNet(nn.Module):
 
     def _make_layer(self, block, planes, blocks, stride=1, endlayer=False):
         if endlayer:
-            true_planes = planes
             blocks = blocks - 1
         layers = []
-        planes = int(planes * self.width_mult)
+
         if 'human' in self.mode:
+            # original human-designed ResNets
             downsample = None
             if stride != 1 or self.inplanes != planes * block.expansion:
                 downsample = nn.Sequential(
@@ -358,6 +387,7 @@ class ResNet(nn.Module):
                 layers.append(block(self.inplanes, planes, base_width=self.base_width))
 
         elif self.mode == 'autosc':
+            # in AutoSC mode, we include the original down-sampling layers in the original ResNet design
             downsample = None
             if stride != 1 or self.inplanes != planes * block.expansion:
                 downsample = nn.Sequential(
@@ -365,20 +395,27 @@ class ResNet(nn.Module):
                     nn.BatchNorm2d(planes * block.expansion),
                 )
             layers.append(block(self.inplanes, planes, stride, downsample, self.base_width))
-            self.block.counter -= 1  # down-sampling layer does not count in layer counter
+
+            # down-sampling layer does not count in layer counter
+            # (don't be stacked with shape adaptors for excessive resizing)
+            self.block.counter -= 1
             self.inplanes = planes * block.expansion
+
             for _ in range(1, blocks):
                 if self.block.counter in [int(i * self.index_gap) for i in range(self.sa_num)]:
                     downsample = nn.Sequential(
                         conv1x1(self.inplanes, planes * block.expansion, stride=2),
                         nn.BatchNorm2d(planes * block.expansion),
                     )
+                    # residual shape adaptors: weight layer as identity branch, 1 x 1 conv as down-sampling branch
                     layers.append(block(self.inplanes, planes, 1, downsample, self.base_width, True, self.input_shape,
-                                        self.output_shape, self.sa_num, alpha=self.alpha_value))
+                                        self.output_shape, self.sa_num, alpha=2.19))
                 else:
+                    # if not resizing, just add standard residual connections
                     layers.append(block(self.inplanes, planes, base_width=self.base_width))
 
         elif self.mode == 'autotl':
+            # in AutoTL mode, we replace all human-defined resizing layers into shape adaptors
             downsample = None
             if stride == 1 and self.inplanes != planes * block.expansion:
                 downsample = nn.Sequential(
@@ -386,23 +423,29 @@ class ResNet(nn.Module):
                     nn.BatchNorm2d(planes * block.expansion),
                 )
                 layers.append(block(self.inplanes, planes, stride, downsample, self.base_width))
+
             elif stride > 1:
                 downsample = nn.Sequential(
                     conv1x1(self.inplanes, planes * block.expansion, stride=2),
                     nn.BatchNorm2d(planes * block.expansion),
                 )
+                # s(alpha) = 0.55 -> alpha = -2.19, for near 0.5 resizing
                 layers.append(block(self.inplanes, planes, 1, downsample, self.base_width, True, self.input_shape,
-                                    self.output_shape, self.sa_num, alpha=-2.19))  # s(alpha) = 0.55
+                                    self.output_shape, self.sa_num, alpha=-2.19))
             else:
+                # if not resizing, just add standard residual connections
                 layers.append(block(self.inplanes, planes, stride, downsample, self.base_width))
+
             self.inplanes = planes * block.expansion
             for _ in range(1, blocks):
                 layers.append(block(self.inplanes, planes, base_width=self.base_width))
 
         elif self.mode == 'shape-adaptor':
+            # standard shape adaptor networks: only shape adaptors contribute to the resizing in the entire network
             for layer_index in range(blocks):
                 if layer_index == 0:
-                    # The first block always uses an down-sampling layer to be consistent with human-designed network
+                    # if in shape adaptor index, insert a shape adaptor here:
+                    # identity block: weight layer; down-sampling block: 1 x 1 conv layer
                     if self.block.counter in [int(i * self.index_gap) for i in range(1, self.sa_num)]:
                         downsample = nn.Sequential(
                             conv1x1(self.inplanes, planes * block.expansion, stride=2),
@@ -410,48 +453,53 @@ class ResNet(nn.Module):
                         )
                         layers.append(block(self.inplanes, planes, 1, downsample, self.base_width, True, self.input_shape, self.output_shape, self.sa_num))
                     else:
+                        # the first layer in any block always uses an 1 x 1 down-sampling (expand feature dimension)
+                        # to be consistent with human-designed network
                         downsample = nn.Sequential(
                             conv1x1(self.inplanes, planes * block.expansion, stride=1),
                             nn.BatchNorm2d(planes * block.expansion),
                         )
                         layers.append(block(self.inplanes, planes, 1, downsample, self.base_width))
                     self.inplanes = planes * block.expansion
+
                 elif self.block.counter in [int(i * self.index_gap) for i in range(1, self.sa_num)]:
+                    # similar thing applied to all other layers in a residual block
                     downsample = nn.Sequential(
                         conv1x1(self.inplanes, planes * block.expansion, stride=2),
                         nn.BatchNorm2d(planes * block.expansion),
                     )
                     layers.append(block(self.inplanes, planes, 1, downsample, self.base_width, True, self.input_shape, self.output_shape, self.sa_num))
                 else:
+                    # if not resizing, just add standard residual connections
                     layers.append(block(self.inplanes, planes, base_width=self.base_width))
 
-        if endlayer:   # final layer will not be inserted shape adaptors and no width mult
-            if self.width_mult != 1.0:
-                downsample = nn.Sequential(
-                    conv1x1(self.inplanes, true_planes * block.expansion, stride=1),
-                    nn.BatchNorm2d(true_planes * block.expansion),
-                )
-                layers.append(block(self.inplanes, true_planes, 1, downsample, base_width=self.base_width))
-            else:
-                layers.append(block(self.inplanes, true_planes, base_width=self.base_width))
+        if endlayer:
+            # final layer will not be inserted shape adaptors and would not be applied any width multiplier
+            layers.append(block(self.inplanes, planes, base_width=self.base_width))
         return nn.Sequential(*layers)
 
     def forward(self, x):
         ShapeAdaptor.counter = 0
         ShapeAdaptor.current_dim = self.input_shape
         ShapeAdaptor.current_dim_true = self.input_shape
-        # first two layers
-        if self.mode == 'shape-adaptor' or self.mode == 'autosc2':
+
+        # first two conv layers before residual blocks
+        if self.mode == 'shape-adaptor':
+            # initialise a list for spatial dimension for shape visualisation
             self.shape_list = [x.shape[-1]]
             x = self.relu(self.bn1(self.conv1(x)))
             x = ShapeAdaptor(self.maxpool(x), x, self.alpha_init)
+
         elif self.mode == 'autotl':
+            # initialise a list for spatial dimension for shape visualisation
             self.shape_list = [x.shape[-1]]
             x = self.relu(self.bn1(self.conv1(x)))
             x = ShapeAdaptor(self.maxpool(x), x, self.alpha_init1)
             self.shape_list.append(x.shape[-1])
             x = ShapeAdaptor(self.maxpool(x), x, self.alpha_init2)
+
         elif self.mode == 'human-imagenet' or (self.mode == 'autosc' and self.input_shape > 64):
+            # initialise a list for spatial dimension for shape visualisation
             self.shape_list = [x.shape[-1]]
             x = self.relu(self.bn1(self.conv1(x)))
             self.shape_list.append(x.shape[-1])
@@ -459,11 +507,14 @@ class ResNet(nn.Module):
             if self.mode == 'autosc':
                 ShapeAdaptor.current_dim = self.input_shape * 0.25
                 ShapeAdaptor.current_dim_true = self.input_shape * 0.25
+
         elif self.mode == 'human-cifar' or (self.mode == 'autosc' and self.input_shape <= 64):
+            # initialise a list for spatial dimension for shape visualisation
             self.shape_list = [x.shape[-1]]
             x = self.relu(self.bn1(self.conv1(x)))
 
-        # bottleneck layers
+        # residual layers
+        # in AutoSC mode, we need to recompute current dimension by including human-defined resizing layers
         for i in range(len(self.layer1)):
             self.shape_list.append(x.shape[-1])
             x = self.layer1[i](x)
@@ -498,6 +549,7 @@ class ResNet(nn.Module):
 MobileNetv2 Network
 """
 
+
 def _make_divisible(v, divisor, min_value=None):
     """
     This function is taken from the original tf repo.
@@ -529,15 +581,15 @@ class ConvBNReLU(nn.Sequential):
 
 
 class InvertedResidual(nn.Module):
-    def __init__(self, inp, oup, stride, expand_ratio, sa=False, input_shape=None, output_shape=16, sa_num=None, mode=None, alpha=None):
+    def __init__(self, inp, oup, stride, expand_ratio, apply_sa=False, input_shape=None, output_shape=16, sa_num=None, mode=None, alpha=None):
         super(InvertedResidual, self).__init__()
         self.stride = stride
-        self.sa = sa
+        self.apply_sa = apply_sa
         self.inp = inp
         self.oup = oup
         self.mode = mode
 
-        if self.sa:
+        if self.apply_sa:
             if alpha is None:
                 self.alpha = nn.Parameter(torch.tensor(SA_init(input_shape, output_shape, sa_num), requires_grad=True))
             else:
@@ -562,7 +614,7 @@ class InvertedResidual(nn.Module):
         self.conv = nn.Sequential(*layers)
 
     def forward(self, x):
-        if self.sa:
+        if self.apply_sa:
             x = self.conv(x)
             return ShapeAdaptor(self.max_pool(x), x, self.alpha)
         else:
@@ -574,7 +626,7 @@ class InvertedResidual(nn.Module):
 
 class MobileNetV2(nn.Module):
     def __init__(self, dataset=None, width_mult=1.0, inverted_residual_setting=None, round_nearest=8, mode=None,
-                 input_shape=32, output_shape=16, sa_num=None, alpha_value=2.19):
+                 input_shape=32, output_shape=16, sa_num=None):
         """
         MobileNet V2 main class
         Args:
@@ -618,27 +670,29 @@ class MobileNetV2(nn.Module):
         self.down_sampling_index = []
 
         # insert shape adaptors:
-        self.layers_num = sum(i[2] for i in inverted_residual_setting) + 2 - 1  # include first and last conv layers
+        # include the first but not the last conv layers (defined outside the residual setting)
+        self.layers_num = sum(i[2] for i in inverted_residual_setting) + 2 - 1
         if self.mode == 'shape-adaptor':
             ShapeAdaptor.type = 'local'
             if self.sa_num is None:
                 self.sa_num = int(np.log2(self.input_shape / 2))
             self.index_gap = self.layers_num / self.sa_num
+
         elif self.mode == 'autosc':
             ShapeAdaptor.type = 'global'
             if self.sa_num is None:
                 self.sa_num = 3 if self.input_shape < 64 else 4
             down_sampling_num = 3 if self.input_shape < 64 else 4
             self.index_gap = (self.layers_num - down_sampling_num - 2) / self.sa_num  # not include down-sampling layers
-        elif self.mode == 'autosc2':
-            ShapeAdaptor.type = 'global'
-            self.sa_num = self.layers_num
 
         if 'human' in self.mode:
+            # changes for CIFAR-like small datasets based on the implementation here:
+            # https://github.com/kuangliu/pytorch-cifar/blob/master/models/mobilenetv2.py
             if 'cifar' in self.mode:
                 features = [ConvBNReLU(3, input_channel, stride=1)]
             else:
                 features = [ConvBNReLU(3, input_channel, stride=2)]
+
             # building inverted residual blocks
             for t, c, n, s in inverted_residual_setting:
                 output_channel = _make_divisible(c * width_mult, round_nearest)
@@ -648,10 +702,12 @@ class MobileNetV2(nn.Module):
                     input_channel = output_channel
 
         if self.mode == 'shape-adaptor':
+            # the first conv layer before residuals
             self.alpha_init = nn.Parameter(torch.tensor(SA_init(input_shape, output_shape, self.sa_num), requires_grad=True))
             features = [ConvBNReLU(3, input_channel, stride=1)]
             self.max_pool = nn.MaxPool2d(2, 2)
-            # standard mode for uniformly insert shape adaptors
+
+            # standard mode for uniformly inserting shape adaptors
             count_layer = 1  # include the first layer
             for t, c, n, s in inverted_residual_setting:
                 output_channel = _make_divisible(c * width_mult, round_nearest)
@@ -669,8 +725,11 @@ class MobileNetV2(nn.Module):
                 features = [ConvBNReLU(3, input_channel, stride=1)]
             else:
                 features = [ConvBNReLU(3, input_channel, stride=2)]
-            count_layer = -1  # does not include the first layer, we insert uniformaly starting in the second layer
+            count_layer = -1  # does not include the early conv layer, we insert shape adaptors in the residual blocks
+
+            # include resizing in the first conv layer; will be used to re-compute resizing for shape adaptors
             self.down_sampling_index = [0] if self.input_shape > 64 else []
+
             for t, c, n, s in inverted_residual_setting:
                 output_channel = _make_divisible(c * width_mult, round_nearest)
                 for i in range(n):
@@ -678,12 +737,12 @@ class MobileNetV2(nn.Module):
                     if stride == 2:
                         features.append(block(input_channel, output_channel, stride, expand_ratio=t))
                         input_channel = output_channel
-                        self.down_sampling_index.append(len(features)-1)
-                        continue
-                    elif count_layer in [int(i * self.index_gap) for i in range(self.sa_num)]:
+                        self.down_sampling_index.append(len(features) - 1)
+                        continue  # avoid layer counting
 
-                        features.append(block(input_channel, output_channel, 1, t, True, input_shape, output_shape, self.sa_num,
-                                              mode=self.mode, alpha=alpha_value))
+                    elif count_layer in [int(i * self.index_gap) for i in range(self.sa_num)]:
+                        features.append(block(input_channel, output_channel, 1, t, True, input_shape, output_shape,
+                                              self.sa_num, mode=self.mode, alpha=2.19))
                     else:
                         features.append(block(input_channel, output_channel, 1, t))
                     count_layer += 1
@@ -691,7 +750,6 @@ class MobileNetV2(nn.Module):
 
         # building last several layers
         features.append(ConvBNReLU(input_channel, self.last_channel, kernel_size=1))
-        # make it nn.Sequential
         self.features = nn.Sequential(*features)
 
         # building classifier
@@ -716,10 +774,12 @@ class MobileNetV2(nn.Module):
         ShapeAdaptor.counter = 0
         ShapeAdaptor.current_dim = self.input_shape
         ShapeAdaptor.current_dim_true = self.input_shape
-        self.shape_list = [x.shape[-1]]
+        self.shape_list = [x.shape[-1]]  # for shape visualisation
 
         if 'human' in self.mode or self.mode == 'autosc':
             x = self.features[0](x)
+            # this means you are applying AutoSC on large dataset;
+            # thus to include the resizing in the first conv layer for computing the current dimension
             if 0 in self.down_sampling_index:
                 ShapeAdaptor.current_dim = ShapeAdaptor.current_dim * 0.5
                 ShapeAdaptor.current_dim_true = ShapeAdaptor.current_dim_true * 0.5
@@ -737,3 +797,5 @@ class MobileNetV2(nn.Module):
         x = x.mean([2, 3])
         x = self.classifier(x)
         return x
+
+

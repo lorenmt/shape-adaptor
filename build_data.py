@@ -192,7 +192,7 @@ for shape in shape_total:
     shape_imagenet_index = [0, 1, 5, 9, 15]
     index = 0; cifar_index = 0; imagenet_index = 0
     plt.text(-32, -22, 'Epoch {}'.format(aa), horizontalalignment='center', fontproperties=prop, size=13)
-    plt.text(-12, -22, 'All ResNet-50 networks have the same structure, and representation space.\n Results are averaged over three individual runs.',
+    plt.text(-12, -22, 'All ResNet-50 networks have the exact same representation space.\n Results are averaged over three individual runs.',
              horizontalalignment='center', verticalalignment='center', fontproperties=prop_italic, size=11)
     plt.text(-12, 5.5, 'ResNet-50 on CIFAR-100', horizontalalignment='center', fontproperties=prop_bold, size=13, style='italic')
 
@@ -258,10 +258,8 @@ c2 = np.load('logging/logging_2/cifar100_resnet_human-imagenet_2.npy', allow_pic
 
 figs = []
 import matplotlib.font_manager as fm
-# prop = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-regular.otf')
-prop = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-Regular.otf')
-prop_italic = fm.FontProperties(fname='/home/shikun/Downloads/MinionPro-It.otf')
-
+prop = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-Regular.otf')
+prop_italic = fm.FontProperties(fname='/Users/shikunliu/Library/Fonts/MinionPro-It.otf')
 
 for i in range(1, 201):
     plt.figure(figsize=(5, 4.5))
@@ -271,17 +269,17 @@ for i in range(1, 201):
     b = np.stack([b0.item()['loss'][:i, 3],  b1.item()['loss'][:i, 3], b2.item()['loss'][:i, 3]])
     c = np.stack([c0.item()['loss'][:i, 3], c1.item()['loss'][:i, 3], c2.item()['loss'][:i, 3]])
 
-    plt.plot(np.mean(c*100, axis=0), label='Human Designed A', color='blue')
-    plt.plot(np.mean(b*100, axis=0), label='Human Designed B', color='red')
-    plt.plot(np.mean(a*100, axis=0), label='Shape Adaptor Designed', color='orange')
+    plt.plot(np.mean(c*100, axis=0), label='Human Designed A', color='#33bbee')
+    plt.plot(np.mean(b*100, axis=0), label='Human Designed B', color='#009988')
+    plt.plot(np.mean(a*100, axis=0), label='Shape Adaptor Designed', color='#cc3311')
 
-    plt.scatter(i, np.mean(a*100, axis=0)[-1], s=18, color='orange')
-    plt.scatter(i, np.mean(b*100, axis=0)[-1], s=18, color='red')
-    plt.scatter(i, np.mean(c*100, axis=0)[-1], s=18, color='blue')
+    plt.scatter(i, np.mean(a*100, axis=0)[-1], s=18, c='#cc3311')
+    plt.scatter(i, np.mean(b*100, axis=0)[-1], s=18, c='#009988')
+    plt.scatter(i, np.mean(c*100, axis=0)[-1], s=18, c='#33bbee')
 
-    plt.fill_between(np.arange(i), np.max(a, axis=0)*100, np.min(a, axis=0)*100, facecolor='orange', alpha=0.1)
-    plt.fill_between(np.arange(i), np.max(b, axis=0)*100, np.min(b, axis=0)*100, facecolor='red', alpha=0.1)
-    plt.fill_between(np.arange(i), np.max(c, axis=0)*100, np.min(c, axis=0)*100, facecolor='blue', alpha=0.1)
+    plt.fill_between(np.arange(i), np.max(a, axis=0)*100, np.min(a, axis=0)*100, facecolor='#cc3311', alpha=0.1)
+    plt.fill_between(np.arange(i), np.max(b, axis=0)*100, np.min(b, axis=0)*100, facecolor='#009988', alpha=0.1)
+    plt.fill_between(np.arange(i), np.max(c, axis=0)*100, np.min(c, axis=0)*100, facecolor='#33bbee', alpha=0.1)
 
     plt.xlim(0, 200)
     mult = max(int(np.mean(c*100, axis=0).max() / 5) - 1, 0)
@@ -315,7 +313,7 @@ number_of_frames = min(gif1.get_length(), gif2.get_length())
 
 #Create writer object
 new_gif=[]
-for i in range(number_of_frames):
+for i in range(200):
     img1 = plt.imread('../paper/gif_2/resnet50_{}.png'.format(i))
     img2 = plt.imread('../paper/gif_3/resnet50_{}.png'.format(i+1))
     new_image = np.hstack((img1, img2))
@@ -323,3 +321,53 @@ for i in range(number_of_frames):
 
 from pygifsicle import optimize
 optimize('../paper/resnet50.gif', "../paper/resnet50_small.gif")
+
+
+# ===================================================
+fig, ax1 = plt.subplots()
+
+a = np.stack([a0.item()['loss'][:, 2], a1.item()['loss'][:, 2], a2.item()['loss'][:, 2]])
+b = np.stack([b0.item()['loss'][:, 2], b1.item()['loss'][:, 2], b2.item()['loss'][:, 2]])
+c = np.stack([c0.item()['loss'][:, 2], c1.item()['loss'][:, 2], c2.item()['loss'][:, 2]])
+
+ax1.plot(np.mean(c, axis=0), label='Human Designed A', color='blue')
+ax1.plot(np.mean(b, axis=0), label='Human Designed B', color='red')
+ax1.plot(np.mean(a, axis=0), label='Shape Adaptor Designed', color='orange')
+
+ax1.fill_between(np.arange(200), np.max(a, axis=0), np.min(a, axis=0), facecolor='orange', alpha=0.2)
+ax1.fill_between(np.arange(200), np.max(b, axis=0), np.min(b, axis=0), facecolor='red', alpha=0.2)
+ax1.fill_between(np.arange(200), np.max(c, axis=0), np.min(c, axis=0), facecolor='blue', alpha=0.2)
+
+
+plt.xlim(0, 200)
+# plt.ylim(0, 4)
+
+plt.ylabel('Test Loss', fontproperties=prop, size=13)
+plt.yscale('log')
+
+plt.xlabel('Epochs', fontproperties=prop, size=13)
+plt.xticks(fontproperties=prop, size=13)
+plt.yticks(fontproperties=prop, size=13)
+plt.legend(loc='lower left', prop=prop, frameon=False)
+
+
+ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+ax2.set_ylabel('Accuracy', fontproperties=prop, size=13)  # we already handled the x-label with ax1
+
+a = np.stack([a0.item()['loss'][:, 3], a1.item()['loss'][:, 3], a2.item()['loss'][:, 3]])
+b = np.stack([b0.item()['loss'][:, 3], b1.item()['loss'][:, 3], b2.item()['loss'][:, 3]])
+c = np.stack([c0.item()['loss'][:, 3], c1.item()['loss'][:, 3], c2.item()['loss'][:, 3]])
+
+ax2.plot(np.mean(c, axis=0) * 100, label='Human Designed A', color='blue', ls='--')
+ax2.plot(np.mean(b, axis=0) * 100, label='Human Designed B', color='red', ls='--')
+ax2.plot(np.mean(a, axis=0) * 100, label='Shape Adaptor Designed', color='orange', ls='--')
+
+ax2.fill_between(np.arange(200), np.max(a, axis=0) * 100, np.min(a, axis=0) * 100, facecolor='orange', alpha=0.2)
+ax2.fill_between(np.arange(200), np.max(b, axis=0) * 100, np.min(b, axis=0) * 100, facecolor='red', alpha=0.2)
+ax2.fill_between(np.arange(200), np.max(c, axis=0) * 100, np.min(c, axis=0) * 100, facecolor='blue', alpha=0.2)
+
+ax2.set_ylim(20, 82)  # we already handled the x-label with ax1
+ax2.get_yticks(fontproperties=prop, size=13)
+
+plt.savefig('../paper/gif_3/resnet50_{}.png'.format(i), dpi=300)

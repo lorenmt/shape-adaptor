@@ -18,12 +18,10 @@ os.environ['KMP_DUPLICATE_LIB_OK'] ='True'
 parser = argparse.ArgumentParser(description='AutoTL training for single GPU')
 parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--dataset', default='cub_200', type=str, help='wikiart, sketches, stanford-cars, vgg-flowers')
-parser.add_argument('--mode', default='autotl', type=str, help='human-imagenet')
-parser.add_argument('--alpha_lr', default=0.1, type=float, help='learning rate for shape adaptor weights')
-parser.add_argument('--weight_lr', default=0.001, type=float, help='learning rate for network weights')
+parser.add_argument('--alpha_lr', default=0.1, type=float, help='learning rate for shape parameters')
+parser.add_argument('--weight_lr', default=0.001, type=float, help='learning rate for weight parameters')
 parser.add_argument('--weight_decay', default=5e-4, type=float, help='weight decay for network weight')
 parser.add_argument('--id', default=0, type=int, help='for statistical evaluation purpose')
-parser.add_argument('--input_dim', default=224, type=int, help='32 for small, 224 for large')
 parser.add_argument('--limit_dim', default=999, type=int, help='limit dim for memory constraint version')
 parser.add_argument('--step', default=20, type=int, help='the step between two shape adaptor updates')
 parser.add_argument('--batch-size', default=8, type=int, help='batch size')
@@ -40,6 +38,8 @@ def model_fit(x_pred, x_output):
 # define image transformation
 batch_size = args.batch_size
 if args.dataset in ['stanford-cars', 'cub_200']:
+    # we apply the same transformation in:
+    # https://github.com/arunmallya/piggyback/blob/5a6094c45896c035a690d6f2fac0b102df176600/src/dataset.py
     trans_train = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
@@ -67,6 +67,7 @@ else:
         transforms.ToTensor(),
         transforms.Normalize(MEAN[args.dataset], VAR[args.dataset]),
     ])
+
 train_loader = torch.utils.data.DataLoader(
     dataset=dset.ImageFolder('dataset/autotl/{:s}/train'.format(args.dataset), transform=trans_train),
     batch_size=batch_size,
@@ -77,46 +78,42 @@ test_loader = torch.utils.data.DataLoader(
     batch_size=batch_size,
     shuffle=False)
 
-# define network
+# define a pre-trained ResNet-50 network
 device = torch.device("cuda:{:d}".format(args.gpu) if torch.cuda.is_available() else "cpu")
 
-model = ResNet(Bottleneck, [3, 4, 6, 3], dataset=args.dataset, mode=args.mode, input_shape=args.input_dim).to(device)
+model = ResNet(Bottleneck, [3, 4, 6, 3], dataset=args.dataset, mode='autotl', input_shape=224).to(device)
 model_url = 'https://download.pytorch.org/models/resnet50-19c8e357.pth'
 state_dict = load_state_dict_from_url(model_url)
 state_dict = {k: v for k, v in state_dict.items() if 'fc' not in k}
 model.load_state_dict(state_dict, strict=False)
 
 
-# define individual parameter lists for network and architecture weights
+# define individual parameter lists for network shape and network weight
 alpha_list = []
-fc_list = []
-parameter_list = []
+weight_list = []
 for _, (key, value) in enumerate(model.named_parameters()):
     if 'alpha' in key:
         alpha_list.append(value)
     else:
-        parameter_list.append(value)
-    if 'fc' in key:
-        fc_list.append(value)
+        weight_list.append(value)
 
 
 total_epoch = args.epochs
-if 'human' not in args.mode:
-    alpha_optimizer = optim.SGD(alpha_list, lr=args.alpha_lr, momentum=0.9, nesterov=True)
-    alpha_scheduler = optim.lr_scheduler.CosineAnnealingLR(alpha_optimizer, total_epoch)
-
-weight_optimizer = optim.SGD(parameter_list, lr=args.weight_lr, weight_decay=args.weight_decay, momentum=0.9, nesterov=True)
+alpha_optimizer = optim.SGD(alpha_list, lr=args.alpha_lr, momentum=0.9, nesterov=True)
+alpha_scheduler = optim.lr_scheduler.CosineAnnealingLR(alpha_optimizer, total_epoch)
+weight_optimizer = optim.SGD(weight_list, lr=args.weight_lr, weight_decay=args.weight_decay, momentum=0.9, nesterov=True)
 weight_scheduler = optim.lr_scheduler.CosineAnnealingLR(weight_optimizer, total_epoch)
+
 
 train_batch = len(train_loader)
 test_batch = len(test_loader)
-ShapeAdaptor.scaling = 1.0  # no scaling required in autotl mode
+ShapeAdaptor.penalty = 1.0  # no penalty required in autotl mode
 iteration = 0
 avg_cost = np.zeros([total_epoch, 4], dtype=np.float32)
 shape_list = []
 sigmoid_alpha_list = []
-scaling_list = []
 start_time = time.time()  # start processing time
+
 for index in range(total_epoch):
     cost = np.zeros(2, dtype=np.float32)
 
@@ -169,7 +166,7 @@ for index in range(total_epoch):
             test_pred = model(test_data)
             test_loss = model_fit(test_pred, test_label)
 
-            # calculate testing logging and accuracy
+            # compute test data accuracy
             test_predict_label1 = test_pred.data.max(1)[1]
             test_acc1 = test_predict_label1.eq(test_label).sum().item() / test_data.shape[0]
 
@@ -177,30 +174,35 @@ for index in range(total_epoch):
             cost[1] = test_acc1
             avg_cost[index][2:] += cost / test_batch
 
+    # scheduler update
     weight_scheduler.step()
     if 'human' not in args.mode:
         alpha_scheduler.step()
-    input_data = torch.randn(1, 3, args.input_dim, args.input_dim).to(device)
+
+    # computer memory and parameter usage
+    input_data = torch.randn(1, 3, 224, 224).to(device)
     flops, params = profile(model, inputs=(input_data, ), verbose=False)
     flops, params = clever_format([flops, params], "%.3f")
+
     print('EPOCH: {:04d} ITER: {:04d} | TRAIN [LOSS|ACC.]: {:.4f} {:.4f} || TEST [LOSS|ACC.]: {:.4f} {:.4f} || MACs {} Params {}'
           .format(index, iteration, avg_cost[index][0], avg_cost[index][1], avg_cost[index][2], avg_cost[index][3], flops, params))
+
     if 'human' not in args.mode:
         alphas = [0.5 + 0.5 * torch.sigmoid(i).squeeze().detach().cpu().numpy() for i in alpha_list]
         sigmoid_alpha_list.append(alphas)
         shape_list.append(model.shape_list)
-        scaling_list.append(ShapeAdaptor.scaling)
-        print('sigmoid(alpha) = {} | current structure = {}'.format(sigmoid_alpha_list[-1], shape_list[-1]))
+        print('sigmoid(alpha) = {} | current shape = {}'.format(sigmoid_alpha_list[-1], shape_list[-1]))
     print('TOP: {}'.format(max(avg_cost[:, 3])))
+
 end_time = time.time()
 print('Total training takes {:.4f} seconds.'.format(end_time - start_time))
 
 dict = {'shape-list': shape_list,
         'alpha': sigmoid_alpha_list,
-        'scaling': scaling_list,
         'loss': avg_cost,
         'macs': flops,
         'parms': params,
         'time': end_time - start_time}
-np.save('logging/autotl_{}_{}_{}.npy'
-        .format(args.dataset, args.mode, args.id), dict)
+
+np.save('logging/autotl_{}_{}.npy'
+        .format(args.dataset, args.id), dict)

@@ -42,5 +42,5 @@ CLASS_NB = {'cifar10':  10,
        'stanford-cars': 196,
        'wikiart': 195,
        'sketches':250,
-        }
+}
 

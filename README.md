@@ -14,4 +14,12 @@ This repor
 ## Shape Visualisation
 
 
+## License
+Copyright (C) by Adobe Inc.
+
+Licensed under the CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International)
+
+The code is released for academic research and non-commercial use only.
+
+
 

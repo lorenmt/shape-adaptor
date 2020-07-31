@@ -14,7 +14,7 @@ import os
 import time
 
 os.environ['KMP_DUPLICATE_LIB_OK'] ='True'
-parser = argparse.ArgumentParser(description='Model training for single GPU')
+parser = argparse.ArgumentParser(description='Shape Adaptor standard and AutoSC mode training for single GPU')
 parser.add_argument('--gpu', default=0, type=int)
 parser.add_argument('--dataset', default='cifar10', type=str, help='cifar10, cifar100, svhn, aircraft, car')
 parser.add_argument('--mode', default='shape-adaptor', type=str, help='human-cifar, human-imagenet, shape-adaptor')
@@ -23,14 +23,12 @@ parser.add_argument('--sa_num', default=None, type=int, help='the number of shap
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate for network weights')
 parser.add_argument('--id', default=0, type=int, help='for statistical evaluation purpose')
 parser.add_argument('--input_dim', default=32, type=int, help='32 for small, 224 for large')
-parser.add_argument('--output_dim', default=8, type=int, help='output dim for shape adaptor initialisations')
-parser.add_argument('--limit_dim', default=999, type=int, help='limit dim for memory constraint version')
-parser.add_argument('--step', default=20, type=int, help='the step between two shape adaptor updates')
-parser.add_argument('--batch-size', default=128, type=int, help='128 for small, 8 for large')
+parser.add_argument('--output_dim', default=8, type=int, help='output dim required for shape adaptor initialisations')
+parser.add_argument('--limit_dim', default=999, type=int, help='limit dim required for memory constraint shape adaptor')
+parser.add_argument('--step', default=20, type=int, help='the step between every alpha parameters updates')
+parser.add_argument('--batch_size', default=128, type=int, help='128 for small, 8 for large')
 parser.add_argument('--epochs', default=200, type=int, help='total training epochs')
-parser.add_argument('--alpha_value', default=0.0, type=float, help='alpha_init')
-parser.add_argument('--width_mult', default=1.0, type=float, help='alpha_init')
-
+parser.add_argument('--width_mult', default=1.0, type=float, help='width multiplier for MobileNetv2')
 args = parser.parse_args()
 
 
@@ -56,6 +54,7 @@ trans_test = transforms.Compose([
     transforms.Normalize(MEAN[args.dataset], VAR[args.dataset]),
 ])
 
+# use official pytorch datasets if available
 if args.dataset == 'cifar10':
     train_set = dset.CIFAR10(root='dataset', train=True, transform=trans_train, download=True)
     test_set  = dset.CIFAR10(root='dataset', train=False, transform=trans_test, download=True)
@@ -90,28 +89,30 @@ else:
         batch_size=batch_size,
         shuffle=False)
 
+
 # define network
 device = torch.device("cuda:{:d}".format(args.gpu) if torch.cuda.is_available() else "cpu")
 if args.network == 'vgg':
     model = VGG(type='D', sa_num=args.sa_num,
                 dataset=args.dataset, mode=args.mode,
-                input_shape=args.input_dim, output_shape=args.output_dim, alpha_value=args.alpha_value, width_mult=args.width_mult).to(device)
+                input_shape=args.input_dim, output_shape=args.output_dim).to(device)
 elif args.network == 'resnet':
     model = ResNet(Bottleneck, [3, 4, 6, 3], sa_num=args.sa_num,
                    dataset=args.dataset, mode=args.mode,
-                   input_shape=args.input_dim, output_shape=args.output_dim, alpha_value=args.alpha_value, width_mult=args.width_mult).to(device)
+                   input_shape=args.input_dim, output_shape=args.output_dim).to(device)
 elif args.network == 'mobilenetv2':
     model = MobileNetV2(sa_num=args.sa_num, dataset=args.dataset, mode=args.mode,
-                        input_shape=args.input_dim, output_shape=args.output_dim, alpha_value=args.alpha_value, width_mult=args.width_mult).to(device)
+                        input_shape=args.input_dim, output_shape=args.output_dim, width_mult=args.width_mult).to(device)
 
-# define individual parameter lists for network and architecture weights
+
+# define individual parameter lists for network shape and network weight
 alpha_list = []
-parameter_list = []
+weight_list = []
 for _, (key, value) in enumerate(model.named_parameters()):
     if 'alpha' in key:
         alpha_list.append(value)
     else:
-        parameter_list.append(value)
+        weight_list.append(value)
 
 total_epoch = args.epochs
 if 'human' not in args.mode:
@@ -119,9 +120,10 @@ if 'human' not in args.mode:
     alpha_scheduler = optim.lr_scheduler.CosineAnnealingLR(alpha_optimizer, total_epoch)
 
 if args.network == 'mobilenetv2':
-    weight_optimizer = optim.SGD(parameter_list, lr=args.lr, weight_decay=4e-5, momentum=0.9, nesterov=True)
+    # this learning rate is suggested in the official MobileNetv2 paper
+    weight_optimizer = optim.SGD(weight_list, lr=args.lr, weight_decay=4e-5, momentum=0.9, nesterov=True)
 else:
-    weight_optimizer = optim.SGD(parameter_list, lr=args.lr, weight_decay=5e-4, momentum=0.9, nesterov=True)
+    weight_optimizer = optim.SGD(weight_list, lr=args.lr, weight_decay=5e-4, momentum=0.9, nesterov=True)
 weight_scheduler = optim.lr_scheduler.CosineAnnealingLR(weight_optimizer, total_epoch)
 
 
@@ -131,8 +133,9 @@ iteration = 0
 avg_cost = np.zeros([total_epoch, 4], dtype=np.float32)
 shape_list = []
 sigmoid_alpha_list = []
-scaling_list = []
+penalty_list = []
 start_time = time.time()  # start processing time
+
 for index in range(total_epoch):
     cost = np.zeros(2, dtype=np.float32)
 
@@ -147,10 +150,12 @@ for index in range(total_epoch):
         # update alpha
         if 'human' not in args.mode and i % args.step == 0:
             if (i == 0 and index == 0) or ShapeAdaptor.current_dim_true < args.limit_dim:
-                ShapeAdaptor.scaling = 1.0
+                ShapeAdaptor.penalty = 1.0
             else:
-                scaling_total = args.limit_dim / ShapeAdaptor.current_dim_true
-                ShapeAdaptor.scaling = np.power(scaling_total, 1 / ShapeAdaptor.counter)
+                # computer penalty for alpha here
+                penalty_total = args.limit_dim / ShapeAdaptor.current_dim_true
+                ShapeAdaptor.penalty = np.power(penalty_total, 1 / ShapeAdaptor.counter)
+
             train_pred = model(train_data)
             train_loss = model_fit(train_pred, train_label)
             train_loss.backward()
@@ -162,10 +167,10 @@ for index in range(total_epoch):
         # update weight with updated alphas
         if 'human' not in args.mode:
             if (i == 0 and index == 0) or ShapeAdaptor.current_dim_true < args.limit_dim:
-                ShapeAdaptor.scaling = 1.0
+                ShapeAdaptor.penalty = 1.0
             else:
-                scaling_total = args.limit_dim / ShapeAdaptor.current_dim_true
-                ShapeAdaptor.scaling = np.power(scaling_total, 1 / ShapeAdaptor.counter)
+                penalty_total = args.limit_dim / ShapeAdaptor.current_dim_true
+                ShapeAdaptor.penalty = np.power(penalty_total, 1 / ShapeAdaptor.counter)
 
         train_pred = model(train_data)
         train_loss = model_fit(train_pred, train_label)
@@ -176,7 +181,7 @@ for index in range(total_epoch):
         if 'human' not in args.mode:
             alpha_optimizer.zero_grad()
 
-        # calculate training logging and accuracy
+        # compute training data accuracy
         train_predict_label1 = train_pred.data.max(1)[1]
         train_acc1 = train_predict_label1.eq(train_label).sum().item() / train_data.shape[0]
 
@@ -196,16 +201,15 @@ for index in range(total_epoch):
 
             if args.mode == 'shape-adaptor':
                 if ShapeAdaptor.current_dim_true < args.limit_dim:
-                    ShapeAdaptor.scaling = 1.0
+                    ShapeAdaptor.penalty = 1.0
                 else:
-                    scaling_total = args.limit_dim / ShapeAdaptor.current_dim_true
-                    ShapeAdaptor.scaling = np.power(scaling_total, 1 / ShapeAdaptor.counter)
+                    penalty_total = args.limit_dim / ShapeAdaptor.current_dim_true
+                    ShapeAdaptor.penalty = np.power(penalty_total, 1 / ShapeAdaptor.counter)
 
             test_pred = model(test_data)
-            # evaluate on test data
             test_loss = model_fit(test_pred, test_label)
 
-            # calculate testing logging and accuracy
+            # compute test data accuracy
             test_predict_label1 = test_pred.data.max(1)[1]
             test_acc1 = test_predict_label1.eq(test_label).sum().item() / test_data.shape[0]
 
@@ -213,24 +217,30 @@ for index in range(total_epoch):
             cost[1] = test_acc1
             avg_cost[index][2:] += cost / test_batch
 
+    # scheduler update
     weight_scheduler.step()
     if 'human' not in args.mode:
         alpha_scheduler.step()
+
+    # computer memory and parameter usage
     input_data = torch.randn(1, 3, args.input_dim, args.input_dim).to(device)
     flops, params = profile(model, inputs=(input_data, ), verbose=False)
     flops, params = clever_format([flops, params], "%.3f")
+
     print('EPOCH: {:04d} ITER: {:04d} | TRAIN [LOSS|ACC.]: {:.4f} {:.4f} || TEST [LOSS|ACC.]: {:.4f} {:.4f} || MACs {} Params {}'
           .format(index, iteration, avg_cost[index][0], avg_cost[index][1], avg_cost[index][2], avg_cost[index][3], flops, params))
+
     if 'human' not in args.mode:
         alphas = [0.5 + 0.5 * torch.sigmoid(i).squeeze().detach().cpu().numpy() for i in alpha_list]
         sigmoid_alpha_list.append(alphas)
         shape_list.append(model.shape_list)
-        scaling_list.append(ShapeAdaptor.scaling)
-        print('s(alpha) = {} | current structure = {}'.format(sigmoid_alpha_list[-1], shape_list[-1]))
+        penalty_list.append(ShapeAdaptor.penalty)
+        print('s(alpha) = {} | current shape = {}'.format(sigmoid_alpha_list[-1], shape_list[-1]))
     else:
         shape_list.append(model.shape_list)
-        print('human designed structure = {}'.format(shape_list[-1]))
+        print('human designed shape = {}'.format(shape_list[-1]))
     print('TOP: {}'.format(max(avg_cost[:, 3])))
+
 end_time = time.time()
 print('Total training takes {:.4f} seconds.'.format(end_time - start_time))
 
@@ -245,7 +255,7 @@ if 'human' in args.mode:
 else:
     dict = {'shape-list': shape_list,
             'alpha': sigmoid_alpha_list,
-            'scaling': scaling_list,
+            'penalty': penalty_list,
             'loss': avg_cost,
             'macs': flops,
             'parms': params,
