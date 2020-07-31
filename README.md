@@ -6,9 +6,9 @@ This repository contains the source code to support the paper: [Shape Adaptor: A
 
 
 ## Datasets
-This project evaluates on image classification tasks. For small-resolution datasets: CIFAR-10/100, and SVHN, we directly download them based on the official PyTorch data loader. For fine-grained large-resolution datasets: Aircraft, CUB-200 and Stanford Cars, you may download the organised datasets with PyTorch format [in this link](https://www.dropbox.com/sh/m11soye2pj9gvv3/AAAv-aBKOQB65o_1BabkOghaa?dl=0). In AutoTL experiments, we evaluated with the dataset available [in this repo](https://github.com/arunmallya/piggyback). 
+This project evaluates on image classification tasks. For small-resolution datasets: CIFAR-10/100, and SVHN, we directly download them based on the official PyTorch data loader. For fine-grained large-resolution datasets: Aircraft, CUB-200 and Stanford Cars, you may download the organised datasets with the PyTorch format [in this link](https://www.dropbox.com/sh/m11soye2pj9gvv3/AAAv-aBKOQB65o_1BabkOghaa?dl=0). In AutoTL experiments, we evaluated with the dataset available [in this repo](https://github.com/arunmallya/piggyback). 
 
-*Please note that the datasets (provided in the above links) evaluated in Table 1 (in the original paper) and AutoTL, though might come from the same source, but they are different: All experiments done in Table 1 were based on raw, uncropped images; while in AutoTL, the training images were cropped (to be consistent with prior works).*
+*Please note that part of the datasets provided in the above links, evaluated in Table 1 (in the original paper) and AutoTL, come from the same source, but they are different in pre-processing: All experiments done in Table 1 were based on raw, un-cropped images; while in AutoTL, the training images were cropped (to be consistent with prior works).*
 
 ## Experiments
 You may reproduce most of the experiments presented in the paper with the following code.
@@ -20,14 +20,33 @@ File Names | Description
  `model_training.py` | training and evaluation for shape adaptor networks, vanilla human-defined networks, and AutoSC.
  `model_training_autotl.py`  | training and evaluation for AutoTL
 
-To run any experiments on fine-grained dataset: First to create a dataset repository by `cd dataset`, and then move the downloaded datasets into the `dataset` folder. To run experiments on AutoTL application: First to create a sub-folder `autotl` under the `dataset` folder, and then move the downloaded 5 AutoTl datasets into that folder. Please remember to rename the folder of downloaded AutoTL datasets corresponding to the ones defined in `model_training_autotl.py` file.
+To run any experiments: You need to first create a dataset directory by `cd dataset`, and then move the downloaded datasets into the created `dataset` folder. To run experiments on AutoTL application: you need to create a sub-folder `autotl` under the `dataset` folder, and then move the downloaded 5 AutoTL datasets into that folder. Please remember to rename the folder of each transfer learning dataset corresponding to the namings defined in `model_training_autotl.py` file. Eventually you would have the following directory structure.
 
-For running standard shape adaptor networks, original human-designed networks, or AutoSC (automated shape compression), please run: 
+```
+shape-adaptor
+└── dataset
+    ├── aircraft    
+    ├── cub_200  
+    ├── stanford-cars
+    ├── autotl
+    │    ├── cub_200
+    │    ├── sketches
+    │    ├── stanford-cars
+    │    ├── vgg-flowers
+    │    └── wiki-art
+    ├── utils.py
+    ├── model_list.py
+    ├── model_training.py
+    └── model_training_autotl.py
+```
 
-`python model_training.py --FLAG_NAME 'FLAG_VALUE'`. 
 
+For training standard shape adaptor networks, original human-designed networks, or AutoSC (automated shape compression), please run: 
 
-For running AutoTL (automated transfer learning), please run: 
+- `python model_training.py --FLAG_NAME 'FLAG_VALUE'` (for small-resolution datasets)
+- `python model_training.py --FLAG_NAME 'FLAG_VALUE' --lr 0.01 --batch_size 8 --input_dim 224` (for large-resolution datasets)
+
+For training AutoTL (automated transfer learning), please run: 
 
 `python model_training_autotl.py --FLAG_NAME 'FLAG_VALUE'`. 
 
