@@ -4,4 +4,3 @@ dataset/*
 logging/*
 old_code/*
 __pycache__/
-build_data.py

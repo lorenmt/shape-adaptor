@@ -126,7 +126,7 @@ for index in range(total_epoch):
         train_data, train_label = train_data.to(device), train_label.to(device)
 
         # update alpha
-        if i % args.step == 0 and 'human' not in args.mode:
+        if i % args.step == 0:
             train_pred = model(train_data)
             train_loss = model_fit(train_pred, train_label)
             train_loss.backward()
@@ -140,10 +140,9 @@ for index in range(total_epoch):
         train_loss = model_fit(train_pred, train_label)
         train_loss.backward()
         weight_optimizer.step()
-        weight_optimizer.zero_grad()
 
-        if 'human' not in args.mode:
-            alpha_optimizer.zero_grad()
+        weight_optimizer.zero_grad()
+        alpha_optimizer.zero_grad()
 
         # calculate training logging and accuracy
         train_predict_label1 = train_pred.data.max(1)[1]
@@ -176,8 +175,7 @@ for index in range(total_epoch):
 
     # scheduler update
     weight_scheduler.step()
-    if 'human' not in args.mode:
-        alpha_scheduler.step()
+    alpha_scheduler.step()
 
     # computer memory and parameter usage
     input_data = torch.randn(1, 3, 224, 224).to(device)
@@ -187,11 +185,10 @@ for index in range(total_epoch):
     print('EPOCH: {:04d} ITER: {:04d} | TRAIN [LOSS|ACC.]: {:.4f} {:.4f} || TEST [LOSS|ACC.]: {:.4f} {:.4f} || MACs {} Params {}'
           .format(index, iteration, avg_cost[index][0], avg_cost[index][1], avg_cost[index][2], avg_cost[index][3], flops, params))
 
-    if 'human' not in args.mode:
-        alphas = [0.5 + 0.5 * torch.sigmoid(i).squeeze().detach().cpu().numpy() for i in alpha_list]
-        sigmoid_alpha_list.append(alphas)
-        shape_list.append(model.shape_list)
-        print('sigmoid(alpha) = {} | current shape = {}'.format(sigmoid_alpha_list[-1], shape_list[-1]))
+    alphas = [0.5 + 0.5 * torch.sigmoid(i).squeeze().detach().cpu().numpy() for i in alpha_list]
+    sigmoid_alpha_list.append(alphas)
+    shape_list.append(model.shape_list)
+    print('sigmoid(alpha) = {} | current shape = {}'.format(sigmoid_alpha_list[-1], shape_list[-1]))
     print('TOP: {}'.format(max(avg_cost[:, 3])))
 
 end_time = time.time()
