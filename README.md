@@ -1,7 +1,7 @@
 # Shape Adaptor
 This repository contains the source code to support the paper: [Shape Adaptor: A Learnable Resizing Module](https://arxiv.org), by [Shikun Liu](shikun.io) and [Adobe Research Team](https://research.adobe.com/). 
 
-![alt text](visuals/resnet50.gif "Shape Visualisation of ResNet50")
+![alt text](visuals/resnet50.gif "Shape Visualisation of ResNet-50")
 
 
 
@@ -34,7 +34,7 @@ To visualise shapes, you may modify the file `visualise_shape.py` to generate sh
 
 VGG-16 | ResNet-50 | MobiletNetv2
 ------- | --------| ------------
-<img src="visuals/vgg16.png" alt="alt text" width="100" height="200"> | ![alt text](visuals/resnet50.png "Shape Visualisation of VGG-16")  | ![alt text](visuals/mobilenetv2.png "Shape Visualisation of VGG-16") 
+<img src="visuals/vgg16.png" alt="VGG-16" height="300"> | <img src="visuals/resnet50.png" alt="ResNet-50"  height="300">  | <img src="visuals/mobilnetv2.png" alt="MobileNetv2"  height="300">
 
 ## Other Comments
 1. The provided code is highly optimised for readability, with heavy documentations to assist readers to better understand this project. For training with default options and hyper-parameters, you should expect to achieve similar performances (at most +-2\% difference) compared to the numbers presented in the paper. If you have met some weird problems, or simply require some additional help on understanding some parts of the code, please contact me directly, or just post an issue in this repo (preferred, so everybody could see it).
