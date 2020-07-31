@@ -50,9 +50,9 @@ For training with shape adaptor networks, original human-designed networks, or A
 
 For training with AutoTL (automated transfer learning), please run: 
 
-`python model_training_autotl.py --FLAG_NAME 'FLAG_VALUE'`
+- `python model_training_autotl.py --FLAG_NAME 'FLAG_VALUE'`
 
-All flags are well described in each training file, and the default option for each flag represents the one we reported in the paper. 
+All flags are explained in each training file, and the default option for each flag represents the one we reported in the paper. 
 
 ## Shape Visualisation
 To visualise network shapes, you may modify the file `visualise_shape.py` to generate shapes look like the ones included in the paper. The following figures present the human-designed network shapes for the original VGG-16, ResNet-50 and Mobilenetv2 using our provided code.
