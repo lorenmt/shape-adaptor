@@ -55,7 +55,7 @@ For training with AutoTL (automated transfer learning), please run:
 All flags are explained in each training file, and the default option for each flag represents the one we reported in the paper. 
 
 ## Shape Visualisation
-To visualise network shapes, you may modify the file `visualise_shape.py` to generate shapes look like the ones included in the paper. The following figures present the human-designed network shapes for the original VGG-16, ResNet-50 and Mobilenetv2 using our provided code.
+To visualise network shapes, you may modify the file `visualise_shape.py` to generate shapes look like the ones presented in the paper. The following figures show the human-designed network shapes for the original VGG-16, ResNet-50 and Mobilenetv2 based on our provided code.
 
 VGG-16 | ResNet-50 | MobiletNetv2
 ------- | --------| ------------
