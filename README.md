@@ -62,7 +62,7 @@ VGG-16 | ResNet-50 | MobiletNetv2
 <img src="visuals/vgg16.png" alt="VGG-16" height="300"> | <img src="visuals/resnet50.png" alt="ResNet-50"  height="300">  | <img src="visuals/mobilenetv2.png" alt="MobileNetv2"  height="300">
 
 ## Other Comments
-1. The provided code is highly optimised for readability, with heavy documentations to assist readers to better understand this project. For training with default options and hyper-parameters, you should expect to achieve similar performances (at most +-2\% difference) compared to the numbers presented in the paper. If you have met some weird errors, or simply require some additional help on understanding any part of the code, please contact me directly, or just post an issue in this repo (preferred, so everybody could see it).
+1. The provided code is highly optimised for readability, with heavy documentations to assist readers to better understand this project. When training with default options and hyper-parameters, you should expect to achieve similar performances (at most +-2\% difference) compared to the numbers presented in the paper. If you have met some weird errors, or simply require some additional help on understanding any part of the code, please contact me directly, or just post an issue in this repo (preferred, so everybody could see it).
 
 2.  We did not perform any heavy hyper-parameter search on each network and each dataset, i.e., you could possibly achieve a better result by further tuning it. Please also check out the appendix in the paper for the negative results: this might save you some time, if you are planning to improve shape adaptors for your own research.
 
