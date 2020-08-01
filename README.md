@@ -8,7 +8,7 @@ This repository contains the source code to support the paper: [Shape Adaptor: A
 ## Datasets
 This project evaluates on image classification tasks. For small-resolution datasets: CIFAR-10/100, and SVHN, we directly download them based on the official PyTorch data loader. For fine-grained large-resolution datasets: Aircraft, CUB-200 and Stanford Cars, you may download the organised datasets with the PyTorch format [in this link](https://www.dropbox.com/sh/m11soye2pj9gvv3/AAAv-aBKOQB65o_1BabkOghaa?dl=0). In AutoTL experiments, we evaluated with the dataset available [in this repo](https://github.com/arunmallya/piggyback). 
 
-*Please note that part of the datasets provided in the above links, evaluated in Table 1 (in the original paper) and AutoTL, come from the same source, but they are different in pre-processing: All experiments done in Table 1 were based on raw, un-cropped images; while in AutoTL, the training images were cropped (to be consistent with prior works).*
+*Please note that part of the datasets provided in the above links, evaluated in Table 1 (in the original paper) and AutoTL, come from the same source, but they are different in pre-processing: All experiments done in Table 1 were based on raw, un-cropped images; while in AutoTL, the training images in some datasets were cropped (CUB-200, and Stanford Cars specifically, to be consistent with prior works).*
 
 ## Experiments
 You may reproduce most of the experiments presented in the paper with the following code.
@@ -16,13 +16,13 @@ You may reproduce most of the experiments presented in the paper with the follow
 File Names | Description
 ---------- | -----------
 `utils.py` | a list of dataset mean and variance used for data loader
-`model_list.py` |  shape adaptor formations and network architecture design for VGG, ResNet and MobileNetv2 
+`model_list.py` |  shape adaptor formulations and network architecture design for VGG, ResNet and MobileNetv2 
  `model_training.py` | training and evaluation for shape adaptor networks, vanilla human-defined networks, and AutoSC.
  `model_training_autotl.py`  | training and evaluation for AutoTL
 
 To run any experiments: you need to first create a dataset directory by `cd dataset`, and then move the downloaded datasets into the created `dataset` folder. 
 
-To run experiments on AutoTL: you need to create a sub-folder `autotl` under the `dataset` folder, and then move the downloaded 5 transfer learning datasets into that folder. Please remember to rename the folder of dataset in `autotl` corresponding to the namings defined in the dataset flag from the  `model_training_autotl.py` file. Eventually you would have the following directory structure.
+To run experiments on AutoTL: you need to create a sub-folder `autotl` under the `dataset` folder, and then move the downloaded 5 transfer learning datasets into that folder. Please remember to rename the folder of dataset in `autotl` corresponding to the naming defined in the dataset flag from the  `model_training_autotl.py` file. Eventually, you would expect to have the following directory structure.
 
 ```
 shape-adaptor

@@ -14,12 +14,15 @@ def ShapeAdaptor(input1, input2, alpha, residual=False, r1=0.5, r2=1.0):
 
     # total no. of shape adaptors
     ShapeAdaptor.counter += 1
+
     # the true current dim without any penalty (will be used for computing the correct penalty value)
     ShapeAdaptor.current_dim_true *= ((r2 - r1) * torch.sigmoid(alpha).item() + r1)
+
     if ShapeAdaptor.type == 'local':
         # a shape adaptor will drop at least 1 dimension (local structure), used in standard or AutoTL mode
         ShapeAdaptor.current_dim = int(ShapeAdaptor.current_dim * s_alpha)
         dim = 1 if ShapeAdaptor.current_dim < 1 else ShapeAdaptor.current_dim   # output dim should be at least 1
+
     elif ShapeAdaptor.type == 'global':
         # a shape adaptor could maintain the same dimension (global structure), used in AutoSC mode
         ShapeAdaptor.current_dim = ShapeAdaptor.current_dim * s_alpha
@@ -93,7 +96,7 @@ class VGG(nn.Module):
                 if 'human' in self.mode:
                     layers += [nn.MaxPool2d(2, 2)]
                 elif self.mode == 'autosc':
-                    layers += [nn.MaxPool2d(2, 2, ceil_mode=True)]
+                    layers += [nn.MaxPool2d(2, 2, ceil_mode=True)]  # use ceil mode to avoid 0 dimension feature layer
             else:
                 # Standard mode is built on the human-designed network *without* the original resizing layers
                 layers += [nn.Conv2d(channel_in, ch, kernel_size=3, padding=1),
@@ -132,7 +135,7 @@ class VGG(nn.Module):
             index_gap = len(self.sampling_index_full) / self.sa_num
             self.sampling_index = [self.sampling_index_full[int(i * index_gap)] for i in range(self.sa_num)]
 
-        # define fully-connected prediction layers; we use one fc-layer across all methods for consistency
+        # define fully-connected prediction layers; we use one fc-layer across all networks for consistency
         self.classifier = nn.Sequential(
             nn.Linear(512, CLASS_NB[dataset]),
         )
@@ -142,7 +145,8 @@ class VGG(nn.Module):
                 # compute shape adaptor initialisation by a heuristic
                 self.alpha = nn.Parameter(torch.tensor([SA_init(input_shape, output_shape, self.sa_num)] * self.sa_num, requires_grad=True))
             elif self.mode == 'autosc':
-                # initialise shape adaptors to be the original network shape: s(alpha) = 0.95, alpha = 2.19
+                # initialise shape adaptors to be consistent with the original human-designed network shape:
+                # s(alpha) = 0.95, alpha = 2.19
                 self.alpha = nn.Parameter(torch.tensor([2.19] * self.sa_num, requires_grad=True))
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -345,7 +349,7 @@ class ResNet(nn.Module):
                 # in AutoTL mode, we replace human-defined resizing layers by shape adaptors
                 # the original ResNet has two initial down-sampling layers before residual blocks
                 # s(alpha) = 0.55 -> alpha = -2.19,
-                # initialise shape adaptors to make them consistent with the pre-trained dimension
+                # initialise shape adaptors to make them consistent with the original human-designed network shape
                 self.alpha_init1 = nn.Parameter(torch.tensor(-2.19, requires_grad=True))
                 self.alpha_init2 = nn.Parameter(torch.tensor(-2.19, requires_grad=True))
 
@@ -401,8 +405,8 @@ class ResNet(nn.Module):
                 )
             layers.append(block(self.inplanes, planes, stride, downsample, self.base_width))
 
-            # down-sampling layer does not count in layer counter
-            # (don't be stacked with shape adaptors for excessive resizing)
+            # down-sampling layer does not include in layer counter
+            # (not to be stacked with shape adaptors for excessive resizing)
             self.block.counter -= 1
             self.inplanes = planes * block.expansion
 
