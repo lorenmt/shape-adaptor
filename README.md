@@ -54,6 +54,10 @@ For training with AutoTL (automated transfer learning), please run:
 
 All flags are explained in each training file, and the default option for each flag represents the one we reported in the paper. 
 
+### A Toy Example
+If you think the implementation is difficult to understand, we have also provided a toy example to help you get you start with. This toy example `vgg16_cifar_toy.py` includes a VGG-16 model evaluated on CIFAR-100 dataset, and it provides with two flags only: `gpu`: training GPU ID and `mode`: shape-adaptor, and human, representing human-defined network and shape adaptor network respectively. We hard-coded the network structure, shape adaptor hyper-parameters, and remove all other redundant code to maximise readability.  Different from the full version in  `model_training.py` which insert shape adaptor uniformly, shape adaptors in this toy example are attached on the human-defined layer locations (for readability purpose, no prominent performance change).  
+
+
 ## Shape Visualisation
 To visualise network shapes, you may modify the file `visualise_shape.py` to generate shapes look like the ones presented in the paper. The following figures show the human-designed network shapes for the original VGG-16, ResNet-50 and Mobilenetv2 respectively, based on our provided code.
 

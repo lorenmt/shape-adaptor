@@ -29,6 +29,7 @@ parser.add_argument('--step', default=20, type=int, help='step between every alp
 parser.add_argument('--batch_size', default=128, type=int, help='128 for small, 8 for large')
 parser.add_argument('--epochs', default=200, type=int, help='total training epochs')
 parser.add_argument('--width_mult', default=1.0, type=float, help='width multiplier only for MobileNetv2')
+
 args = parser.parse_args()
 
 
