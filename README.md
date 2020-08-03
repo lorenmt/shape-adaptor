@@ -89,7 +89,7 @@ If you found this code/work to be useful in your own research, please considerin
 
 ```
 @inproceedings{shape_adaptor,
-  title={Shape Adaptor: A Learning Reshaping Module},
+  title={Shape Adaptor: A Learnable Resizing Module},
   author={Liu, Shikun and Lin, Zhe and Wang, Yilin and Zhang, Jianming and Perazzi, Federico and Johns, Edward},
   booktitle={Proceedings of the European Conference on Computer Vision (ECCV)},
   year={2020}
