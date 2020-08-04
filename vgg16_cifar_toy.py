@@ -54,7 +54,7 @@ class VGG16(nn.Module):
 
         self.pooling = nn.MaxPool2d(2, 2)
 
-        # initialisations computed from; d_in = 32 and d_out = 8
+        # initialisations computed by; d_in = 32 and d_out = 8
         self.alpha = nn.Parameter(-0.346 * torch.ones(4, requires_grad=True))
 
         for m in self.modules():
@@ -270,7 +270,7 @@ for index in range(total_epoch):
     if args.mode == 'shape-adaptor':
         alpha_scheduler.step()
 
-    # computer memory and parameter usage
+    # compute memory and parameter usage
     input_data = torch.randn(1, 3, 32, 32).to(device)
     flops, params = profile(model, inputs=(input_data, ), verbose=False)
     flops, params = clever_format([flops, params], "%.3f")

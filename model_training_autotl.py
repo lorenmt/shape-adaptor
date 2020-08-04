@@ -177,7 +177,7 @@ for index in range(total_epoch):
     weight_scheduler.step()
     alpha_scheduler.step()
 
-    # computer memory and parameter usage
+    # compute memory and parameter usage
     input_data = torch.randn(1, 3, 224, 224).to(device)
     flops, params = profile(model, inputs=(input_data, ), verbose=False)
     flops, params = clever_format([flops, params], "%.3f")
