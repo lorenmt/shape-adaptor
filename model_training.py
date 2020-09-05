@@ -150,10 +150,10 @@ for index in range(total_epoch):
 
         # update alpha
         if 'human' not in args.mode and i % args.step == 0:
-            if (i == 0 and index == 0) or ShapeAdaptor.current_dim_true < args.limit_dim:
+            if iteration == 0 or ShapeAdaptor.current_dim_true < args.limit_dim:
                 ShapeAdaptor.penalty = 1.0
             else:
-                # computer penalty for alpha here
+                # compute penalty for alpha here
                 penalty_total = args.limit_dim / ShapeAdaptor.current_dim_true
                 ShapeAdaptor.penalty = np.power(penalty_total, 1 / ShapeAdaptor.counter)
 
@@ -167,7 +167,7 @@ for index in range(total_epoch):
 
         # update weight with updated alphas
         if 'human' not in args.mode:
-            if (i == 0 and index == 0) or ShapeAdaptor.current_dim_true < args.limit_dim:
+            if iteration == 0 or ShapeAdaptor.current_dim_true < args.limit_dim:
                 ShapeAdaptor.penalty = 1.0
             else:
                 penalty_total = args.limit_dim / ShapeAdaptor.current_dim_true
