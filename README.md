@@ -55,6 +55,11 @@ For training with AutoTL (automated transfer learning), please run:
 
 All flags are explained in top of each training file, and the default option for each flag represents the one we experimented in the paper. 
 
+### Memory Bounded Shape Adaptor
+For training standard shape adaptor networks (not AutoSC), you may use the flag `limit_dim` to constrain the dimensionality of the last layer, to grow no more than this user-defined `limit_dim` value. We set `limit_dim` no larger than the running GPU memory, and thus this value is not fixed, but depending on each specific hardware model and memory size. For ImageNet training with 8 NVIDIA Tesla P100 set-up, we set `limit_dim=15`. For other large-resolution datasets, we set `limit_dim=30` in a single GPU set-up. We did no apply `limit_dim` in smaller resolution datasets, since they all grow no more than the GPU memory. 
+
+An easy trick to find out this value is to train the network first without any memory limit, and to wait it eventually reaches the `GPU Out of Memory` issue (if it never reaches this issue, then we are good here). Then, in `current shape` of the printing log, it prints out the dimensionality of each layer for the entire network. Finally, the last number of `current shape` before having OOM issue is then the maximal dimension we can have in this running GPU, and we may re-train the network by setting `limit_dim` to be that number.
+
 ### A Toy Example
 If you think the above implementation is a little bit difficult to understand, or simply want to play with some easy experiments, we have also provided a toy example to help you get start with. This toy example `vgg16_cifar_toy.py` includes a VGG-16 model evaluated on CIFAR-100 dataset, and it provides with two flags only: `gpu`: the training GPU ID; and `mode`: shape-adaptor, and human, representing human-defined network and shape adaptor network, respectively. We hard-coded the network structure, shape adaptor hyper-parameters, and removed all other redundant code to maximise readability.  Different from the full version in  `model_training.py` where we insert shape adaptors uniformly across all network layers, shape adaptors in this toy example are attached based on the human-defined resizing layer locations (for readability purpose, no prominent performance change).  
 
