@@ -53,6 +53,10 @@ For training with AutoTL (automated transfer learning), please run:
 
 - `python model_training_autotl.py --FLAG_NAME 'FLAG_VALUE'`
 
+For training with ImageNet in a multi-gpu distributed setting, please run:
+- `python model_training_imagenet.py --FLAG_NAME 'FLAG_VALUE'` (Check out [this file]("https://github.com/pytorch/examples/tree/master/imagenet) for the usage of each flag)
+
+
 All flags are explained in top of each training file, and the default option for each flag represents the one we experimented in the paper. 
 
 ### Memory Bounded Shape Adaptor
