@@ -44,12 +44,12 @@ shape-adaptor
 ```
 
 
-For training with shape adaptor networks, original human-designed networks, or AutoSC (automated shape compression), please run: 
+For training with shape adaptor networks, original human-designed networks, or AutoSC (automated shape compression) on non-ImageNet datasets, please run: 
 
 - `python model_training.py --FLAG_NAME 'FLAG_VALUE'` (for small-resolution datasets)
 - `python model_training.py --FLAG_NAME 'FLAG_VALUE' --lr 0.01 --batch_size 8 --input_dim 224` (for fine-grained large-resolution datasets)
 
-For training with AutoTL (automated transfer learning), please run: 
+For training with AutoTL (automated transfer learning) with ResNet-50, please run: 
 
 - `python model_training_autotl.py --FLAG_NAME 'FLAG_VALUE'`
 
