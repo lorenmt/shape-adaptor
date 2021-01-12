@@ -80,7 +80,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'multi node data parallel training')
 
 ### shape adaptor related flags
-parser.add_argument('--mode', default='human', type=str, help='human-cifar, human-imagenet, shape-adaptor')
+parser.add_argument('--mode', default='shape-adaptor', type=str, help='human-cifar, human-imagenet, shape-adaptor, autosc')
 parser.add_argument('--network', default='vgg', type=str, help='vgg, resnet, mobilenetv2')
 parser.add_argument('--step', default=1500, type=int, help='the step between two shape adaptor updates, 200 for autosc, 1500 for standard')
 parser.add_argument('--output_dim', default=8, type=int, help='output dim required for shape adaptor initialisations')
