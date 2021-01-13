@@ -261,7 +261,7 @@ def main_worker(gpu, ngpus_per_node, args):
         flops, params = clever_format([flops, params], "%.3f")
         if 'human' not in args.mode:
             current_state = 'EPOCH {:03d}|TRAIN_ACC {}|TEST_TOP1 {}|TEST_TOP5 {}|SCALING {}|SHAPE {}|Macs {}|Para {}'\
-                .format(epoch, train_acc.data, test_acc1.data, test_acc5.data, ShapeAdaptor.penalty, model.shape_list, flops, params)
+                .format(epoch, train_acc.data, test_acc1.data, test_acc5.data, ShapeAdaptor.penalty, model.module.shape_list, flops, params)
         else:
             current_state = 'EPOCH {:03d}|TRAIN_ACC {}|TEST_TOP1 {}|TEST_TOP5 {}|Macs {}|Para {}' \
                 .format(epoch, train_acc.data, test_acc1.data, test_acc5.data, flops, params)
@@ -283,7 +283,7 @@ def main_worker(gpu, ngpus_per_node, args):
         weight_scheduler.step()
         if 'human' not in args.mode:
             alpha_scheduler.step()
-            print(model.shape_list)
+            print(model.module.shape_list)
 
 
 def weight_train(train_loader, model, criterion, weight_optimizer, alpha_optimizer, epoch, args):
