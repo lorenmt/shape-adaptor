@@ -1,6 +1,8 @@
 # Shape Adaptor
 This repository contains the source code to support the paper: [Shape Adaptor: A Learnable Resizing Module](https://arxiv.org/abs/2008.00892), by [Shikun Liu](shikun.io) and [Adobe Research Team](https://research.adobe.com/). 
 
+> Shape Adaptor is a **learnable** pooling module designed for convolutional neural networks (CNNs), automatically learning suitable resizing factors for a training dataset.
+
 ![alt text](visuals/resnet50.gif "Shape Visualisation of ResNet-50")
 
 
